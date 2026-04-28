@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+        <title>GO LMU Launcher</title>
+        <link rel="stylesheet" href="styles.css" />
+    </head>
+    <body>
+        <header class="topbar">
+            <div class="brand">
+                <img src="../../assets/logo-horizontal.png" alt="GO Setups" class="brand-logo" />
+            </div>
+            <div class="status" id="lmuStatus">
+                <span class="dot dot-off"></span>
+                <span class="status-text">LMU not detected</span>
+            </div>
+        </header>
+
+        <main class="layout">
+            <section class="panel">
+                <h2 class="panel-title">1. Track</h2>
+                <select id="trackSelect" class="select">
+                    <option value="">Loading tracks…</option>
+                </select>
+                <div class="install-row">
+                    <p id="installPath" class="muted small"></p>
+                    <button id="changeInstallPath" class="ghost-btn" type="button">Change folder…</button>
+                </div>
+            </section>
+
+            <section class="panel">
+                <h2 class="panel-title">2. Car</h2>
+                <div class="row">
+                    <select id="carClassSelect" class="select" style="flex: 1">
+                        <option value="">— Class —</option>
+                    </select>
+                    <select id="carModelSelect" class="select" style="flex: 1" disabled>
+                        <option value="">— Car model —</option>
+                    </select>
+                    <select id="carLiverySelect" class="select" style="flex: 1.4" disabled>
+                        <option value="">— Livery —</option>
+                    </select>
+                </div>
+                <div class="row" style="margin-top: 10px; align-items: center; gap: 10px">
+                    <button id="autoDetectCar" class="ghost-btn" type="button">Auto-detect from LMU</button>
+                    <span id="autoDetectLabel" class="muted small"></span>
+                </div>
+                <p class="muted small" id="carHint">
+                    Pick class → model → livery, or use auto-detect to inherit whatever you have selected in LMU.
+                </p>
+            </section>
+
+            <section class="panel">
+                <h2 class="panel-title">3. Weather preset</h2>
+                <div class="presets">
+                    <button class="preset preset-large" data-preset="dry">
+                        <span class="preset-icon">☀️</span>
+                        <span class="preset-name">GO Setups Dry</span>
+                        <span class="preset-meta">Clear · 20°C · Saturated</span>
+                    </button>
+                    <button class="preset preset-large" data-preset="overcast_rain">
+                        <span class="preset-icon">🌧️</span>
+                        <span class="preset-name">GO Setups Rain</span>
+                        <span class="preset-meta">Overcast · 75% rain · 20°C</span>
+                    </button>
+                    <button class="preset preset-large" data-preset="custom">
+                        <span class="preset-icon">🎛️</span>
+                        <span class="preset-name">Custom</span>
+                        <span class="preset-meta">Tune sky / rain / temp / wind</span>
+                    </button>
+                </div>
+
+                <div id="customWeather" class="grid custom-weather hidden">
+                    <label class="field">
+                        <span class="field-label">Temperature <em id="cwTempVal">22 °C</em></span>
+                        <input id="cwTemp" type="range" min="5" max="40" step="1" value="22" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">Sky</span>
+                        <select id="cwSky" class="select">
+                            <option value="0">Clear</option>
+                            <option value="1">Light clouds</option>
+                            <option value="2">Partially cloudy</option>
+                            <option value="3">Mostly cloudy</option>
+                            <option value="4">Overcast</option>
+                            <option value="5">Cloudy &amp; drizzle</option>
+                            <option value="6">Cloudy &amp; light rain</option>
+                            <option value="7">Overcast &amp; light rain</option>
+                            <option value="8">Overcast &amp; rain</option>
+                            <option value="9">Overcast &amp; heavy rain</option>
+                            <option value="10">Overcast &amp; storm</option>
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field-label">Rain chance <em id="cwRainVal">0 %</em></span>
+                        <input id="cwRain" type="range" min="0" max="100" step="5" value="0" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">Humidity <em id="cwHumVal">50 %</em></span>
+                        <input id="cwHum" type="range" min="0" max="100" step="5" value="50" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">Wind speed <em id="cwWindVal">0 km/h</em></span>
+                        <input id="cwWind" type="range" min="0" max="50" step="1" value="0" />
+                    </label>
+                    <label class="field">
+                        <span class="field-label">Wind direction <em id="cwWindDirVal">0°</em></span>
+                        <input id="cwWindDir" type="range" min="0" max="360" step="10" value="0" />
+                    </label>
+                </div>
+            </section>
+
+            <section class="panel">
+                <h2 class="panel-title">4. Session settings <span class="muted small" style="text-transform:none;font-weight:400;letter-spacing:0">(GO Setups defaults)</span></h2>
+                <div class="grid">
+                    <label class="field">
+                        <span class="field-label">Practice length <em id="practiceLengthVal">360 min</em></span>
+                        <input id="practiceLength" type="range" min="15" max="360" step="15" value="360" />
+                    </label>
+
+                    <label class="field">
+                        <span class="field-label">Practice start time <em id="startTimeVal">12:00</em></span>
+                        <input id="startTime" type="range" min="0" max="1440" step="30" value="720" />
+                    </label>
+
+                    <label class="field">
+                        <span class="field-label">Starting grip (RealRoad)</span>
+                        <select id="startingGrip" class="select">
+                            <option value="preset:GREEN.RRBIN">Green</option>
+                            <option value="preset:Light.rrbin">Light</option>
+                            <option value="preset:Medium.rrbin">Medium</option>
+                            <option value="preset:Heavy.rrbin">Heavy</option>
+                            <option value="preset:SATURATED.RRBIN" selected>Saturated</option>
+                        </select>
+                    </label>
+
+                    <label class="field">
+                        <span class="field-label">RealRoad time scale <em id="realRoadTimeScaleVal">0×</em></span>
+                        <input id="realRoadTimeScale" type="range" min="0" max="15" step="1" value="0" />
+                    </label>
+
+                    <label class="field toggle-field">
+                        <span class="field-label">Tyre warmers</span>
+                        <label class="switch">
+                            <input id="tireWarmers" type="checkbox" checked />
+                            <span class="switch-slider"></span>
+                        </label>
+                    </label>
+
+                    <label class="field toggle-field">
+                        <span class="field-label">Private practice</span>
+                        <label class="switch">
+                            <input id="privatePractice" type="checkbox" checked />
+                            <span class="switch-slider"></span>
+                        </label>
+                    </label>
+
+                    <label class="field">
+                        <span class="field-label">Time scale <em id="timeScaleVal">Normal</em></span>
+                        <input id="timeScale" type="range" min="0" max="60" step="1" value="0" />
+                    </label>
+
+                    <label class="field">
+                        <span class="field-label">Flag rules</span>
+                        <select id="flagRules" class="select">
+                            <option value="3">Full</option>
+                            <option value="2" selected>Full w/o DQ</option>
+                            <option value="1">Black only</option>
+                            <option value="0">None</option>
+                        </select>
+                    </label>
+
+                    <label class="field">
+                        <span class="field-label">Track limits</span>
+                        <select id="trackLimitsRules" class="select">
+                            <option value="1" selected>Default</option>
+                            <option value="2">Strict</option>
+                            <option value="3">Relaxed</option>
+                            <option value="0">None</option>
+                        </select>
+                    </label>
+
+                    <label class="field">
+                        <span class="field-label">Track-limit points <em id="trackLimitsPointsVal">5</em></span>
+                        <input id="trackLimitsPoints" type="range" min="0" max="63" step="1" value="5" />
+                    </label>
+
+                    <label class="field">
+                        <span class="field-label">Mechanical failures</span>
+                        <select id="mechanicalFailures" class="select">
+                            <option value="0">Off</option>
+                            <option value="1" selected>Normal</option>
+                            <option value="2">Time scaled</option>
+                        </select>
+                    </label>
+                </div>
+            </section>
+
+            <section class="panel launch-panel">
+                <button id="launchBtn" class="launch-btn">
+                    <span class="launch-label">Launch Practice in LMU</span>
+                </button>
+                <div class="log" id="log"></div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <span class="muted small">GO Setups · Le Mans Ultimate launcher</span>
+            <span class="muted small">v1.0.0</span>
+        </footer>
+
+        <script src="app.js"></script>
+    </body>
+</html>

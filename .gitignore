@@ -1,0 +1,28 @@
+# Build artifacts & deps
+app/node_modules/
+app/dist/
+app/dist-portable/
+app/_lfm_patch_stage/
+
+# Stray debug captures from earlier dev sessions (path-escape bug dumped these
+# into the project root)
+UsersandreDesktopGO-LMU-debug*.json
+
+# Other local-only working folders (LFM source we extracted to reverse-engineer
+# the API, plus local notes / assets / debug captures).
+extracted/
+sources/
+Branding/
+Andrea-given-data/
+GO-LMU-debug/
+go-lmu-launcher/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Claude / memory state (local only)
+.claude/
+memory/

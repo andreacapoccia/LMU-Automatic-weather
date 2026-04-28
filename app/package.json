@@ -1,0 +1,69 @@
+{
+  "name": "go-lmu-launcher",
+  "version": "1.0.0",
+  "description": "GO Setups - Le Mans Ultimate session launcher with custom weather",
+  "main": "src/main/main.js",
+  "author": {
+    "name": "GO Setups",
+    "email": "support@gosetups.gg"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "node scripts/dev-start.js",
+    "build": "node scripts/build.js",
+    "icon": "node scripts/build-icon.js"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.4.4",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "png-to-ico": "^2.1.8"
+  },
+  "build": {
+    "appId": "gg.gosetups.lmu-launcher",
+    "productName": "GO LMU Launcher",
+    "copyright": "Copyright © 2026 GO Setups",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "${productName} Setup ${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "GO LMU Launcher"
+    },
+    "portable": {
+      "artifactName": "${productName} Portable ${version}.${ext}"
+    }
+  }
+}

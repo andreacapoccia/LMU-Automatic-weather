@@ -1,6 +1,6 @@
 {
   "name": "go-lmu-launcher",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "GO Setups - Le Mans Ultimate session launcher with custom weather",
   "main": "src/main/main.js",
   "author": {

@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
+const { execFile } = require('child_process');
 
 const launcher = require('./lmu-launcher');
 const scanner = require('./install-scanner');
@@ -9,10 +10,10 @@ let mainWindow = null;
 
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 1080,
-        height: 760,
-        minWidth: 900,
-        minHeight: 640,
+        width: 1422,
+        height: 828,
+        minWidth: 1100,
+        minHeight: 780,
         backgroundColor: '#0a0a0a',
         autoHideMenuBar: true,
         title: 'GO LMU Launcher',
@@ -119,4 +120,12 @@ ipcMain.handle('app:openExternal', async (_e, url) => {
     if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
         shell.openExternal(url);
     }
+});
+
+ipcMain.handle('gofast:isAlive', () => {
+    return new Promise((resolve) => {
+        execFile('tasklist', ['/FI', 'IMAGENAME eq GOFast.App.exe', '/NH', '/FO', 'CSV'], (err, stdout) => {
+            resolve(!err && stdout.toLowerCase().includes('gofast.app.exe'));
+        });
+    });
 });

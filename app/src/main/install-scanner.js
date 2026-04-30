@@ -169,6 +169,8 @@ function listTracks(installRoot) {
             tracks.push({
                 folder,
                 layoutStem: null,
+                locationName: baseLabel,
+                layoutName: null,
                 label: baseLabel,
                 locationToken: locToken,
                 layoutToken: null,
@@ -180,6 +182,8 @@ function listTracks(installRoot) {
             tracks.push({
                 folder,
                 layoutStem: lay.stem,
+                locationName: baseLabel,
+                layoutName: lay.label,
                 label:
                     layouts.length === 1
                         ? baseLabel

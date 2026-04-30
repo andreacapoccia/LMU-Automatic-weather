@@ -29,7 +29,7 @@ const DEFAULT_OVERRIDES = {
 
     // GO Setups standard session rules (overridable from UI):
     timeScale: 0,                   // 0 = Normal real time, 1-60 = ×N
-    flagRules: 2,                   // 0=None 1=Black Only 2=Full w/o DQ 3=Full
+    flagRules: 3,                   // 0=None 1=Penalties 2=Penalties+FCY 3=Full w/o DQ (per LMU's settings.json comment)
     trackLimitsRules: 1,            // 0=None 1=Default 2=Strict 3=Relaxed
     trackLimitsPoints: 5,           // 0..63
     mechanicalFailures: 1,          // 0=Off 1=Normal 2=Time Scaled

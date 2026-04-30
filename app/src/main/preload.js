@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('go', {
     pickInstallPath: () => ipcRenderer.invoke('install:pickPath'),
     resetInstallPath: () => ipcRenderer.invoke('install:resetPath'),
     isLmuAlive: () => ipcRenderer.invoke('lmu:isAlive'),
+    isGoFastAlive: () => ipcRenderer.invoke('gofast:isAlive'),
     fetchLiveTracks: () => ipcRenderer.invoke('lmu:fetchTracks'),
     fetchLiveCars: () => ipcRenderer.invoke('lmu:fetchCars'),
     launch: (payload) => ipcRenderer.invoke('lmu:launch', payload),

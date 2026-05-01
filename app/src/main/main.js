@@ -141,33 +141,38 @@ ipcMain.handle('convert:run', (_e, { inputPath, outputDir }) => {
     return new Promise((resolve, reject) => {
         const child = spawn('node', [path.join(CONVERTER_DIR, 'convert.js'), inputPath, outputDir]);
         const results = [];
+        const stderrLines = [];
         child.stdout.on('data', chunk => {
             for (const line of chunk.toString().split('\n').filter(Boolean)) {
                 try { results.push(JSON.parse(line)); } catch {}
-                if (mainWindow) mainWindow.webContents.send('convert:log', line);
+                try { if (mainWindow) mainWindow.webContents.send('convert:log', line); } catch (_) {}
             }
         });
         child.stderr.on('data', chunk => {
-            if (mainWindow) mainWindow.webContents.send('convert:log', chunk.toString());
+            const text = chunk.toString();
+            stderrLines.push(text);
+            try { if (mainWindow) mainWindow.webContents.send('convert:log', text); } catch (_) {}
         });
         child.on('close', code =>
-            code === 0 ? resolve(results) : reject(new Error(`converter exited with code ${code}`))
+            code === 0
+                ? resolve(results)
+                : reject(new Error(`converter exited ${code}: ${stderrLines.join('').trim()}`))
         );
     });
 });
 
 ipcMain.handle('convert:startWatch', (_e, { watchDir, outputDir }) => {
-    if (watcherProcess) return { already: true };
+    if (watcherProcess) return { ok: false, reason: 'already running' };
     watcherProcess = spawn('node', [path.join(CONVERTER_DIR, 'watcher.js'), watchDir, outputDir]);
     watcherProcess.stdout.on('data', chunk => {
         for (const line of chunk.toString().split('\n').filter(Boolean))
-            if (mainWindow) mainWindow.webContents.send('convert:log', line);
+            try { if (mainWindow) mainWindow.webContents.send('convert:log', line); } catch (_) {}
     });
     watcherProcess.stderr.on('data', chunk => {
-        if (mainWindow) mainWindow.webContents.send('convert:log', chunk.toString());
+        try { if (mainWindow) mainWindow.webContents.send('convert:log', chunk.toString()); } catch (_) {}
     });
     watcherProcess.on('close', () => { watcherProcess = null; });
-    return { started: true };
+    return { ok: true };
 });
 
 ipcMain.handle('convert:stopWatch', () => {

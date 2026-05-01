@@ -1,6 +1,6 @@
 # DuckDB → MoTeC Converter — Design Spec
 **Date:** 2026-05-01  
-**Status:** Approved
+**Status:** Approved (post-review)
 
 ---
 
@@ -33,69 +33,98 @@ The Electron app spawns `node convert.js` for manual conversion and `node watche
 
 ## Conversion Algorithm
 
-### Step 1 — Read session anchors
-- `channelsList` table → frequency (Hz) + unit per channel
-- `GPS Time` table (100 Hz) → `session_start = first row value` (absolute LMU clock reference, e.g. 668.985 s)
-- `Lap` table (event-driven) → array of `{ ts, lap_number }` = lap boundary timestamps
+### Step 1 — Read session catalogues
+- `channelsList` table → fixed-rate channels: `(channelName, frequency, unit)`. Contains ~56 rows.
+- `eventsList` table → event-driven channels: `(channelName, unit)`. Contains ~42 rows. No frequency column — these are logged on state change, not at a fixed rate.
+- `GPS Time` table (100 Hz, fixed-rate) → `session_start = value of first row`. This is the absolute LMU clock anchor (e.g. 668.985 s). Note: `GPS Time` is a fixed-rate channel, so its `value` column contains the actual clock reading — do NOT compute it from row index.
+- `Lap` table (event-driven) → array of `{ ts, value }` sorted by ts = lap boundary timestamps. Lap numbers start from wherever the session counter was (e.g. lap 6 in a qualifying segment) — normalize to 1-indexed for the output file.
+- `metadata` table → `DriverName`, `TrackName`, `CarName`, `CarClass`, recording date/time — used to populate the `.ld` binary header.
 
 ### Step 2 — Reconstruct timestamps per channel
 
-All times in the .ld file are relative to session start (t=0 at first sample).
+All times in the `.ld` file are relative to session start (t=0 at first sample).
 
-**Time-series channels** (no `ts` column — logged at fixed rate):
+**Fixed-rate channels** (in `channelsList`, no `ts` column):
 ```
 t[i] = i / frequency
 ```
 
-**Event-driven channels** (`ts` column — logged on state change):
+**Event-driven channels** (in `eventsList`, has `ts` column):
 ```
 t[i] = ts[i] - session_start
 ```
+Event-driven channels have sparse samples (e.g. Gear has ~325 rows over a 464-second session). For the `.ld` file, expand event-driven channels to a step-hold interpolation at the frequency of the nearest fixed-rate equivalent (10 Hz), holding the last value until the next event. This ensures MoTeC sees a continuous channel spanning the full session.
 
-**Multi-wheel channels** (`value1`–`value4`): expand into four separate channels using suffix FL/FR/RL/RR.
+**Multi-wheel channels** (`value1`–`value4`, either type): expand into four separate channels with suffix `FL`, `FR`, `RL`, `RR`.
+
+**Multi-wheel + multi-zone** (`TyresTempCentre`, `TyresTempLeft`, `TyresTempRight` — each has value1–4): expand to 12 channels: `Tyre Temp FL/FR/RL/RR` × Inner/Mid/Outer.
 
 ### Step 3 — Synthetic Beacon channel
-A `Beacon` channel at 100 Hz (int16) holds value `32` at each lap-start sample, `0` elsewhere. MoTeC i2 reads this to draw lap dividers.
+A `Beacon` channel at 100 Hz (int16) holds value `32` at each lap-start sample (rounded to nearest sample index from the `Lap` ts), `0` elsewhere. The value `32` is the standard MoTeC community convention; if laps do not appear in i2, try `1` or `100`.
+
+**Last lap duration**: since the `Lap` table only records lap starts, the final lap's duration is calculated as `(total_fixed_rate_samples / max_frequency) - (last_lap_ts - session_start)`.
 
 ### Step 4 — Write .ld (binary)
-One file containing the full session. Format:
-- Fixed-size file header (magic, version, session metadata, channel count)
-- Linked list of channel headers: name, unit, frequency, sample count, data block offset
-- Data blocks: raw float32 per sample (int16 for Beacon)
+
+The binary `.ld` file carries **all session metadata** (driver, track, car, date, time) in a fixed-size header. The `.ldx` does NOT carry this — it is a setup overlay only. Structure:
+
+- **File header** (~1024 bytes): magic `0x40`, version, channel count, offsets, and metadata strings (driver name, venue name, vehicle id, engine id, date `DD/MM/YYYY`, time `HH:MM:SS`, short comment, event name, session name)
+- **Channel headers**: linked list (each ~548 bytes), fields: prev/next pointers, data start offset, data length, channel name (32 chars), short name (8 chars), unit (12 chars), frequency, sample count, datatype (float32=0x07 or int16=0x05)
+- **Data blocks**: raw float32 per sample for data channels, raw int16 for Beacon
+
+Binary format reference: the community-documented MoTeC `.ld` format used by `python-motec` and similar reverse-engineering projects (offsets derived from known working reference files).
 
 ### Step 5 — Write .ldx (XML)
-Plain XML file (same name as .ld, different extension). Contains:
-- Session info: driver, track, car, date/time, class
-- `<Laps>` block: one entry per lap with start time and duration calculated from the `Lap` table
+
+The `.ldx` is a supplemental overlay read by i2 alongside the `.ld`. It stores lap summary stats and setup parameters — NOT session metadata (that is in the `.ld` header). Structure matches the reference `GO4 296 LMGT3 MONcg E Q03 MOTEC.ldx`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<LDXFile RRReplayFile="..." RRPlugin="..." ...>
+  <Layers>
+    <Details>
+      <String Id="Total Laps" Value="N"/>
+      <String Id="Fastest Time" Value="M:SS.mmm"/>
+      <String Id="Fastest Lap" Value="K"/>
+      <!-- car setup Numeric/String elements from metadata.CarSetup (future) -->
+    </Details>
+  </Layers>
+</LDXFile>
+```
 
 ---
 
 ## Channel Map
 
-| MoTeC Channel | DuckDB Table | Notes |
-|---|---|---|
-| Engine RPM | `Engine RPM` | rpm |
-| Throttle Pos | `Throttle Pos` | % |
-| Brake Pos | `Brake Pos` | % |
-| Gear | `Gear` | event-driven |
-| Ground Speed | `Speed` | km/h |
-| G Force Lat | `Accel X` | G |
-| G Force Long | `Accel Y` | G |
-| G Force Vert | `Accel Z` | G |
-| Susp Pos FL/FR/RL/RR | `Susp Pos` (value1–4) | mm |
-| Damper Vel FL/FR/RL/RR | `Susp Vel` (value1–4) | mm/s |
-| Brake Temp FL/FR/RL/RR | `Brake Temp` (value1–4) | °C |
-| Tyre Temp FL/FR/RL/RR | `Tire Temp` (value1–4) | °C |
-| Tyre Pressure FL/FR/RL/RR | `Tire Pres` (value1–4) | kPa |
-| Fuel Level | `Fuel Level` | l |
-| Water Temp | `Water Temp` | °C |
-| Oil Temp | `Oil Temp` | °C |
-| TC | `TC` | event-driven |
-| ABS | `ABS` | event-driven |
-| In Pits | `In Pits` | event-driven |
-| GPS Lat | `GPS Lat` | deg |
-| GPS Lon | `GPS Lon` | deg |
-| Beacon | synthetic | 32 at lap start, 0 elsewhere |
+Exact DuckDB table names (case-sensitive) and confirmed units from `channelsList`:
+
+| MoTeC Channel | DuckDB Table | DuckDB Unit | Conversion |
+|---|---|---|---|
+| Engine RPM | `Engine RPM` | rpm | ×1 |
+| Throttle Pos | `Throttle Pos` | % | ×1 |
+| Brake Pos | `Brake Pos` | % | ×1 |
+| Gear | `Gear` | — | event-driven |
+| Ground Speed | `Ground Speed` | km/h | ×1 |
+| G Force Lat | `G Force Lat` | g | ×1 |
+| G Force Long | `G Force Long` | g | ×1 |
+| G Force Vert | `G Force Vert` | g | ×1 |
+| Susp Pos FL/FR/RL/RR | `Susp Pos` (value1–4) | m | ×1000 → mm |
+| Brake Temp FL/FR/RL/RR | `Brakes Temp` (value1–4) | °C | ×1 |
+| Tyre Temp FL/FR/RL/RR Inner | `TyresTempLeft` (value1–4) | °C | ×1 |
+| Tyre Temp FL/FR/RL/RR Mid | `TyresTempCentre` (value1–4) | °C | ×1 |
+| Tyre Temp FL/FR/RL/RR Outer | `TyresTempRight` (value1–4) | °C | ×1 |
+| Tyre Pressure FL/FR/RL/RR | `TyresPressure` (value1–4) | kPa | ×1 |
+| Fuel Level | `Fuel Level` | l | ×1 |
+| Water Temp | `Engine Water Temp` | °C | ×1 |
+| Oil Temp | `Engine Oil Temp` | °C | ×1 |
+| TC | `TC` | — | event-driven |
+| ABS | `ABS` | — | event-driven |
+| In Pits | `In Pits` | — | event-driven |
+| GPS Lat | `GPS Latitude` | deg | ×1 |
+| GPS Lon | `GPS Longitude` | deg | ×1 |
+| Beacon | synthetic | — | int16, 32 at lap start |
+
+**Note:** `Susp Vel` (Damper Velocity) does not appear in the sample `channelsList` — skip unless confirmed present in the target DuckDB file. If present, apply ×1000 (m/s → mm/s).
 
 ---
 
@@ -109,7 +138,8 @@ Plain XML file (same name as .ld, different extension). Contains:
 **Automatic (folder watch):**
 - User configures a watch folder (LMU's telemetry output directory)
 - Main process spawns `node watcher.js <folder> <outdir>` on startup
-- Watcher uses `chokidar` to detect new `.duckdb` files, triggers conversion automatically
+- Watcher uses `chokidar` to detect new `.duckdb` files
+- File size stabilization: after `add`/`change` event, poll `fs.stat` every 500 ms until size is unchanged for 2 consecutive checks, then trigger conversion
 - Start/stop via `convert:startWatch` / `convert:stopWatch` IPC
 - Main process kills watcher child on app exit
 
@@ -126,7 +156,7 @@ Output `.ld` + `.ldx` files are written to the same folder as the input `.duckdb
 - If a DuckDB table is missing or empty, the channel is skipped silently (not a fatal error)
 - If the `Lap` table has no rows, the entire session is written as a single lap
 - Conversion errors are written to stderr and surfaced in the renderer as an error log line
-- The watcher ignores files still being written (waits for file size to stabilize before converting)
+- The watcher ignores files still being written (file size stabilization check)
 
 ---
 
@@ -134,4 +164,5 @@ Output `.ld` + `.ldx` files are written to the same folder as the input `.duckdb
 
 - UI panel design (user will build the UI themselves)
 - Real-time telemetry streaming (converter works on completed session files only)
-- Car setup parameters in .ldx (skipped for now, can be added later from `metadata.CarSetup`)
+- Car setup parameters in .ldx (from `metadata.CarSetup` — deferred to later)
+- `SurfaceTypes` multi-wheel event channel (edge case, deferred)

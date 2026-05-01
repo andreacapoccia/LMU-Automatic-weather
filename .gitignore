@@ -26,3 +26,4 @@ Thumbs.db
 # Claude / memory state (local only)
 .claude/
 memory/
+.worktrees/

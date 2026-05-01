@@ -15,4 +15,12 @@ contextBridge.exposeInMainWorld('go', {
         ipcRenderer.on('lmu:log', listener);
         return () => ipcRenderer.removeListener('lmu:log', listener);
     },
+    convertRun: (inputPath, outputDir) => ipcRenderer.invoke('convert:run', { inputPath, outputDir }),
+    startWatch: (watchDir, outputDir) => ipcRenderer.invoke('convert:startWatch', { watchDir, outputDir }),
+    stopWatch: () => ipcRenderer.invoke('convert:stopWatch'),
+    onConvertLog: (cb) => {
+        const listener = (_e, line) => cb(line);
+        ipcRenderer.on('convert:log', listener);
+        return () => ipcRenderer.removeListener('convert:log', listener);
+    },
 });

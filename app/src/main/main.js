@@ -1,12 +1,15 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 
 const launcher = require('./lmu-launcher');
 const scanner = require('./install-scanner');
 const settings = require('./settings');
 
 let mainWindow = null;
+
+const CONVERTER_DIR = path.join(__dirname, '../../../DuckDBtoMoTeC/converter');
+let watcherProcess = null;
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -44,6 +47,10 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', () => {
+    if (watcherProcess) { watcherProcess.kill(); watcherProcess = null; }
 });
 
 // ───────── IPC ─────────
@@ -128,4 +135,42 @@ ipcMain.handle('gofast:isAlive', () => {
             resolve(!err && stdout.toLowerCase().includes('gofast.app.exe'));
         });
     });
+});
+
+ipcMain.handle('convert:run', (_e, { inputPath, outputDir }) => {
+    return new Promise((resolve, reject) => {
+        const child = spawn('node', [path.join(CONVERTER_DIR, 'convert.js'), inputPath, outputDir]);
+        const results = [];
+        child.stdout.on('data', chunk => {
+            for (const line of chunk.toString().split('\n').filter(Boolean)) {
+                try { results.push(JSON.parse(line)); } catch {}
+                if (mainWindow) mainWindow.webContents.send('convert:log', line);
+            }
+        });
+        child.stderr.on('data', chunk => {
+            if (mainWindow) mainWindow.webContents.send('convert:log', chunk.toString());
+        });
+        child.on('close', code =>
+            code === 0 ? resolve(results) : reject(new Error(`converter exited with code ${code}`))
+        );
+    });
+});
+
+ipcMain.handle('convert:startWatch', (_e, { watchDir, outputDir }) => {
+    if (watcherProcess) return { already: true };
+    watcherProcess = spawn('node', [path.join(CONVERTER_DIR, 'watcher.js'), watchDir, outputDir]);
+    watcherProcess.stdout.on('data', chunk => {
+        for (const line of chunk.toString().split('\n').filter(Boolean))
+            if (mainWindow) mainWindow.webContents.send('convert:log', line);
+    });
+    watcherProcess.stderr.on('data', chunk => {
+        if (mainWindow) mainWindow.webContents.send('convert:log', chunk.toString());
+    });
+    watcherProcess.on('close', () => { watcherProcess = null; });
+    return { started: true };
+});
+
+ipcMain.handle('convert:stopWatch', () => {
+    if (watcherProcess) { watcherProcess.kill(); watcherProcess = null; }
+    return { stopped: true };
 });

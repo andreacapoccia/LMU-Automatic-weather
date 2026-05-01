@@ -101,13 +101,24 @@ async function readSession(dbPath) {
       }
     }
 
-    // Synthetic Beacon channel at 100 Hz
+    // Lap Number channel — required by MoTeC i2 for lap splitting.
+    // Use 1-based indices so the first event always transitions from 0 → 1.
+    const lapTimes = laps.map(l => l.ts - sessionStart);
+    const lapNums  = laps.map((_, i) => i + 1);
+    channels.push({
+      name: 'Lap Number', shortName: '', unit: '',
+      freq: EVENT_STEP_FREQ,
+      data: stepHold(lapTimes, lapNums, EVENT_STEP_FREQ, sessionDuration),
+      dtype: 'int16',
+    });
+
+    // Synthetic Beacon channel at 100 Hz (one-sample impulse at each lap crossing)
     const beacon = new Array(totalSamples100Hz).fill(0);
     for (const lap of laps) {
       const idx = Math.round((lap.ts - sessionStart) * 100);
       if (idx >= 0 && idx < beacon.length) beacon[idx] = 32;
     }
-    channels.push({ name: 'Beacon', shortName: 'Bcn', unit: '', freq: 100, data: beacon, dtype: 'int16' });
+    channels.push({ name: 'Beacon (Internal)', shortName: '', unit: '', freq: 100, data: beacon, dtype: 'int16' });
 
     return { sessionStart, sessionDuration, laps, meta, channels, totalSamples100Hz };
   } finally {

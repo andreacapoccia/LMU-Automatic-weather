@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
-const { readSession } = require('../lib/duckdb-reader');
+const { readSession, stepHold } = require('../lib/duckdb-reader');
 
 const DB = path.resolve(__dirname, '../../examples/GO4 296 LMGT3 MON E Q04 DUCKDB.duckdb');
 
@@ -50,4 +50,19 @@ test('metadata has DriverName and TrackName', async () => {
   const s = await readSession(DB);
   assert.ok(s.meta.DriverName, 'DriverName missing');
   assert.ok(s.meta.TrackName, 'TrackName missing');
+});
+
+test('stepHold: holds 0 before first event, step-holds values, ends with last value', () => {
+  // 2 events: value=5 at t=0.2, value=9 at t=0.7
+  // at 10 Hz over 1 second: 10 samples, indices 0..9 = t=0.0..0.9
+  const times = [0.2, 0.7];
+  const values = [5, 9];
+  const result = stepHold(times, values, 10, 1.0);
+  assert.strictEqual(result.length, 10);
+  assert.strictEqual(result[0], 0);   // t=0.0, before first event
+  assert.strictEqual(result[1], 0);   // t=0.1, before first event
+  assert.strictEqual(result[2], 5);   // t=0.2, first event fires
+  assert.strictEqual(result[6], 5);   // t=0.6, still holding 5
+  assert.strictEqual(result[7], 9);   // t=0.7, second event fires
+  assert.strictEqual(result[9], 9);   // t=0.9, still holding 9
 });

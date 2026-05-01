@@ -26,11 +26,11 @@ async function readSession(dbPath) {
 
   try {
     const dbPathFwd = dbPath.split('\\').join('/');
-    await run(con, `ATTACH '${dbPathFwd}' AS src (READ_ONLY)`);
+    await run(con, `ATTACH '${dbPathFwd.replace(/'/g, "''")}' AS src (READ_ONLY)`);
     await run(con, 'USE src');
 
     // Session clock anchor
-    const gpsRows = await query(con, 'SELECT value FROM "GPS Time" LIMIT 1');
+    const gpsRows = await query(con, 'SELECT value FROM "GPS Time" ORDER BY rowid LIMIT 1');
     if (!gpsRows.length) throw new Error('GPS Time table is empty');
     const sessionStart = gpsRows[0].value;
 
@@ -119,7 +119,7 @@ function stepHold(eventTimes, eventValues, freq, duration) {
   const nSamples = Math.round(duration * freq);
   const out = new Array(nSamples).fill(0);
   let ei = 0;
-  let lastVal = eventValues.length > 0 ? eventValues[0] : 0;
+  let lastVal = 0;
   for (let i = 0; i < nSamples; i++) {
     const t = i / freq;
     while (ei < eventTimes.length && eventTimes[ei] <= t) {
@@ -131,4 +131,4 @@ function stepHold(eventTimes, eventValues, freq, duration) {
   return out;
 }
 
-module.exports = { readSession };
+module.exports = { readSession, stepHold };

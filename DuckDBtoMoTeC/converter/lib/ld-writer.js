@@ -94,7 +94,7 @@ function writeLD(outPath, session) {
     buf.writeUInt16LE(dtypeA, off + 18);
     buf.writeUInt16LE(bps, off + 20);
     buf.writeUInt16LE(ch.freq, off + 22);
-    buf.writeUInt16LE(0, off + 24); // shift
+    buf.writeUInt16LE(ch.shift ?? 0, off + 24); // shift
     buf.writeUInt16LE(1, off + 26); // mul
     buf.writeUInt16LE(1, off + 28); // scale
     buf.writeInt16LE(0, off + 30);  // dec

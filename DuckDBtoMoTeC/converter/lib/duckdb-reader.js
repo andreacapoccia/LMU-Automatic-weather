@@ -101,24 +101,50 @@ async function readSession(dbPath) {
       }
     }
 
-    // Lap Number channel — required by MoTeC i2 for lap splitting.
-    // Use 1-based indices so the first event always transitions from 0 → 1.
+    // Lap Number channel — MoTeC i2 expects this at 100 Hz with raw encoding:
+    // header shift=32760, raw value = actual_lap_number - 32760.
+    // Derived from reverse-engineering working .ld files.
+    const LAP_NUM_FREQ = 100;
     const lapTimes = laps.map(l => l.ts - sessionStart);
-    const lapNums  = laps.map((_, i) => i + 1);
+    const lapNums  = laps.map(l => l.lapNum);
+    const lapNumRaw = stepHold(lapTimes, lapNums, LAP_NUM_FREQ, sessionDuration)
+      .map(v => v - 32760);
     channels.push({
       name: 'Lap Number', shortName: '', unit: '',
-      freq: EVENT_STEP_FREQ,
-      data: stepHold(lapTimes, lapNums, EVENT_STEP_FREQ, sessionDuration),
+      freq: LAP_NUM_FREQ,
+      data: lapNumRaw,
       dtype: 'int16',
+      shift: 32760,
     });
 
-    // Synthetic Beacon channel at 100 Hz (one-sample impulse at each lap crossing)
-    const beacon = new Array(totalSamples100Hz).fill(0);
-    for (const lap of laps) {
-      const idx = Math.round((lap.ts - sessionStart) * 100);
-      if (idx >= 0 && idx < beacon.length) beacon[idx] = 32;
+    // Beacon (Internal) at 1 Hz. Starts at 0 before first crossing, then
+    // holds 100 between crossings. Skip laps[0] if ts == sessionStart
+    // (LMU init event, not a real crossing). Use Math.ceil so t=0.8s → sample 1.
+    const beaconFreq = 1;
+    const nBeacon = Math.max(1, Math.round(sessionDuration * beaconFreq));
+    const beaconData = new Array(nBeacon).fill(0);
+    let prevSi = -1;
+    let crossingCount = 0;
+    for (let i = 0; i < laps.length; i++) {
+      const t = laps[i].ts - sessionStart;
+      if (t < 0.01) continue;                                            // skip init event at t≈0
+      const si = Math.ceil(t * beaconFreq);
+      if (si <= 0 || si >= nBeacon) continue;
+      // Fill 100 from end of previous crossing to just before this one
+      if (prevSi >= 0) {
+        for (let k = prevSi + 3; k < si; k++) beaconData[k] = 100;
+      }
+      beaconData[si] = -8192;                                            // 0xE000 marker
+      if (si + 1 < nBeacon) beaconData[si + 1] = -32755 + crossingCount; // crossing ID
+      if (si + 2 < nBeacon) beaconData[si + 2] = Math.round((t - Math.floor(t)) * 100);
+      prevSi = si;
+      crossingCount++;
     }
-    channels.push({ name: 'Beacon (Internal)', shortName: '', unit: '', freq: 100, data: beacon, dtype: 'int16' });
+    // Fill 100 from after the last crossing to end
+    if (prevSi >= 0) {
+      for (let k = prevSi + 3; k < nBeacon; k++) beaconData[k] = 100;
+    }
+    channels.push({ name: 'Beacon (Internal)', shortName: '', unit: '', freq: beaconFreq, data: beaconData, dtype: 'int16' });
 
     return { sessionStart, sessionDuration, laps, meta, channels, totalSamples100Hz };
   } finally {

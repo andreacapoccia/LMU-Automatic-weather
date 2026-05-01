@@ -21,17 +21,30 @@ function writeLDX(outPath, session) {
     return;
   }
 
-  // Lap times: duration from start of lap[i] to start of lap[i+1]
-  // Last lap: from lap[N-1].ts to estimated session end
+  // Lap times: duration from start of lap[i] to start of lap[i+1].
+  // Exclude the last lap (always incomplete) and laps[0] if it's an init
+  // event at ts==sessionStart (partial lap started before recording).
   const lapTimes = laps.map((lap, i) => {
     if (i + 1 < laps.length) return laps[i + 1].ts - lap.ts;
-    // Last lap: session end estimated from duration and session start
     const sessionEnd = (sessionStart ?? laps[0].ts) + sessionDuration;
     return sessionEnd - lap.ts;
   });
 
-  const fastestIdx = lapTimes.indexOf(Math.min(...lapTimes));
-  const fastestSecs = lapTimes[fastestIdx];
+  // Only consider laps that are (a) not the last incomplete segment and
+  // (b) not the initial partial lap (first event at session start).
+  const isInitLap = laps.length > 0 && Math.abs(laps[0].ts - sessionStart) < 0.05;
+  const firstValid = isInitLap ? 1 : 0;
+  const validTimes = lapTimes.slice(firstValid, -1);  // exclude last incomplete lap
+
+  let fastestIdx, fastestSecs;
+  if (validTimes.length > 0) {
+    const localIdx = validTimes.indexOf(Math.min(...validTimes));
+    fastestIdx = localIdx + firstValid;
+    fastestSecs = validTimes[localIdx];
+  } else {
+    fastestIdx = 0;
+    fastestSecs = lapTimes[0] ?? 0;
+  }
 
   const xml = [
     '<?xml version="1.0"?>',

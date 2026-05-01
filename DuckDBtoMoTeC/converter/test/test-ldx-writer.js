@@ -47,3 +47,17 @@ test('empty laps does not crash and writes Total Laps = 1', () => {
   assert.ok(xml.includes('Total Laps" Value="1"'));
   fs.unlinkSync(f);
 });
+
+test('last lap duration accounts for session start, not lap 0 ts', () => {
+  // sessionStart = 668.985 (GPS anchor)
+  // lap 0 at ts=700 (out-lap), lap 1 at ts=800
+  // sessionDuration = 200 → sessionEnd = 668.985 + 200 = 868.985
+  // lap 0 time = 800 - 700 = 100s (not used for last lap)
+  // lap 1 time = 868.985 - 800 = 68.985s
+  // fastest = lap 2 (68.985 < 100)
+  const f = path.join(os.tmpdir(), 'test6.ldx');
+  writeLDX(f, { laps: [{ ts: 700 }, { ts: 800 }], sessionDuration: 200, sessionStart: 668.985 });
+  const xml = fs.readFileSync(f, 'utf8');
+  assert.ok(xml.includes('Fastest Lap" Value="2"'), `expected lap 2 fastest: ${xml}`);
+  fs.unlinkSync(f);
+});

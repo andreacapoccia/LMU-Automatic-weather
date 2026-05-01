@@ -2,7 +2,7 @@
 const fs = require('fs');
 
 function writeLDX(outPath, session) {
-  const { laps, sessionDuration } = session;
+  const { laps, sessionDuration, sessionStart } = session;
 
   if (laps.length === 0) {
     const xml = [
@@ -25,8 +25,8 @@ function writeLDX(outPath, session) {
   // Last lap: from lap[N-1].ts to estimated session end
   const lapTimes = laps.map((lap, i) => {
     if (i + 1 < laps.length) return laps[i + 1].ts - lap.ts;
-    // Last lap: session end estimated from duration and first lap start
-    const sessionEnd = laps[0].ts + sessionDuration;
+    // Last lap: session end estimated from duration and session start
+    const sessionEnd = (sessionStart ?? laps[0].ts) + sessionDuration;
     return sessionEnd - lap.ts;
   });
 

@@ -115,6 +115,7 @@ async function readSession(dbPath) {
       data: lapNumRaw,
       dtype: 'int16',
       shift: 32760,
+      flag100: 0x0100, // "lap-related channel" flag at header byte 101 — required for MoTeC i2 lap detection
     });
 
     // Beacon (Internal) at 1 Hz. Starts at 0 before first crossing, then

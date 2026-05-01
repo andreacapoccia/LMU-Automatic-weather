@@ -47,14 +47,16 @@ function writeLD(outPath, session) {
   buf.writeUInt32LE(metaPtr, 8);
   buf.writeUInt32LE(dataPtr, 12);
   buf.writeUInt32LE(EVENT_PTR, 36);
-  buf.writeUInt16LE(1, 64);
+  buf.writeUInt16LE(2, 64);              // matches MoTeC reference (was 1)
   buf.writeUInt16LE(0x4240, 66);
   buf.writeUInt16LE(0xf, 68);
   buf.writeUInt32LE(0x1f44, 70);
   wstr(buf, 'ADL', 74, 8);
-  buf.writeUInt16LE(420, 82);
-  buf.writeUInt16LE(0xadb0, 84);
-  buf.writeUInt32LE(N, 86);
+  buf.writeUInt16LE(200, 82);            // matches MoTeC reference (was 420)
+  buf.writeUInt16LE(0x80, 84);           // matches MoTeC reference (was 0xadb0)
+  buf.writeUInt16LE(N, 86);              // n_channels stored as uint16 at offset 86
+  buf.writeUInt16LE(N, 88);              // and ALSO at offset 88 (MoTeC reads from both)
+  buf.writeUInt32LE(0x00010064, 90);     // unknown constant from reference
   wstr(buf, dt.date, 94, 16);
   wstr(buf, dt.time, 126, 16);
   wstr(buf, meta.DriverName || '', 158, 64);
@@ -118,6 +120,10 @@ function writeLD(outPath, session) {
         buf.writeFloatLE(minV, off + 88);
       }
     }
+
+    // Bytes 100-101: channel-class flag. 0x0100 = lap-related channel
+    // (required for MoTeC i2 to recognize Lap Number as the lap counter).
+    if (ch.flag100) buf.writeUInt16LE(ch.flag100, off + 100);
 
     curDataPtr += dataSizes[i];
   }

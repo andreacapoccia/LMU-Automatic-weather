@@ -4,7 +4,7 @@
   "description": "Convert LMU DuckDB telemetry to MoTeC .ld/.ldx",
   "main": "convert.js",
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test test/*.js"
   },
   "dependencies": {
     "chokidar": "^3.6.0",

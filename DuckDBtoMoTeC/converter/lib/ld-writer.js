@@ -28,7 +28,8 @@ function parseDateTime(meta) {
 }
 
 function writeLD(outPath, session) {
-  const { channels, meta, laps, sessionDuration } = session;
+  const { channels, laps, sessionDuration } = session;
+  const meta = session.meta || {};
   const N = channels.length;
 
   const bytesPerSample = ch => ch.dtype === 'int16' ? 2 : 4;
@@ -82,7 +83,6 @@ function writeLD(outPath, session) {
     const off = CHAN_META_START + i * CHAN_HEAD_SIZE;
     const bps = bytesPerSample(ch);
     const dtypeA = ch.dtype === 'int16' ? 0x03 : 0x07;
-    const dtypeBytes = bps;
     const prevMeta = i === 0 ? 0 : CHAN_META_START + (i - 1) * CHAN_HEAD_SIZE;
     const nextMeta = i === N - 1 ? 0 : CHAN_META_START + (i + 1) * CHAN_HEAD_SIZE;
 
@@ -92,7 +92,7 @@ function writeLD(outPath, session) {
     buf.writeUInt32LE(ch.data.length, off + 12);
     buf.writeUInt16LE(0x2ee1 + i, off + 16);
     buf.writeUInt16LE(dtypeA, off + 18);
-    buf.writeUInt16LE(dtypeBytes, off + 20);
+    buf.writeUInt16LE(bps, off + 20);
     buf.writeUInt16LE(ch.freq, off + 22);
     buf.writeUInt16LE(0, off + 24); // shift
     buf.writeUInt16LE(1, off + 26); // mul

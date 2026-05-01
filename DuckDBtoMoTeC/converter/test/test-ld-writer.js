@@ -84,3 +84,39 @@ test('event_ptr in header points to EVENT_PTR (8180)', () => {
   assert.strictEqual(buf.readUInt32LE(36), 8180);
   fs.unlinkSync(f);
 });
+
+test('channel linked list prev/next pointers are correct', () => {
+  const session = makeSession();
+  const f = path.join(os.tmpdir(), 'test7.ld');
+  writeLD(f, session);
+  const buf = fs.readFileSync(f);
+  const N = session.channels.length;
+  // First channel: prev=0
+  assert.strictEqual(buf.readUInt32LE(CHAN_META_START + 0), 0);
+  // First channel: next points to second channel header
+  assert.strictEqual(buf.readUInt32LE(CHAN_META_START + 4), CHAN_META_START + CHAN_HEAD_SIZE);
+  // Last channel: next=0
+  const lastOff = CHAN_META_START + (N - 1) * CHAN_HEAD_SIZE;
+  assert.strictEqual(buf.readUInt32LE(lastOff + 4), 0);
+  // Last channel: prev points to second-to-last channel header
+  assert.strictEqual(buf.readUInt32LE(lastOff + 0), CHAN_META_START + (N - 2) * CHAN_HEAD_SIZE);
+  fs.unlinkSync(f);
+});
+
+test('data_ptr in each channel header points to the correct byte offset', () => {
+  const session = makeSession();
+  const f = path.join(os.tmpdir(), 'test8.ld');
+  writeLD(f, session);
+  const buf = fs.readFileSync(f);
+  const N = session.channels.length;
+  const baseDataPtr = CHAN_META_START + N * CHAN_HEAD_SIZE;
+  let expectedPtr = baseDataPtr;
+  for (let i = 0; i < N; i++) {
+    const off = CHAN_META_START + i * CHAN_HEAD_SIZE;
+    const actualPtr = buf.readUInt32LE(off + 8);
+    assert.strictEqual(actualPtr, expectedPtr, `channel ${i} data_ptr wrong`);
+    const bps = session.channels[i].dtype === 'int16' ? 2 : 4;
+    expectedPtr += session.channels[i].data.length * bps;
+  }
+  fs.unlinkSync(f);
+});

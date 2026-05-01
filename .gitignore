@@ -2,6 +2,7 @@
 app/node_modules/
 app/dist/
 DuckDBtoMoTeC/converter/node_modules/
+DuckDBtoMoTeC/examples/
 app/dist-portable/
 app/_lfm_patch_stage/
 

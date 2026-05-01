@@ -39,3 +39,11 @@ test('Fastest Time formatted as M:SS.mmm', () => {
   assert.ok(xml.includes('Fastest Time" Value="1:39.206"'), xml);
   fs.unlinkSync(f);
 });
+
+test('empty laps does not crash and writes Total Laps = 1', () => {
+  const f = path.join(os.tmpdir(), 'test5.ldx');
+  writeLDX(f, { laps: [], sessionDuration: 100 });
+  const xml = fs.readFileSync(f, 'utf8');
+  assert.ok(xml.includes('Total Laps" Value="1"'));
+  fs.unlinkSync(f);
+});

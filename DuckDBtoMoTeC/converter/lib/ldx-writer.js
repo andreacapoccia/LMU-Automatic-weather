@@ -4,6 +4,23 @@ const fs = require('fs');
 function writeLDX(outPath, session) {
   const { laps, sessionDuration } = session;
 
+  if (laps.length === 0) {
+    const xml = [
+      '<?xml version="1.0"?>',
+      '<LDXFile Locale="English_US.1252" DefaultLocale="C" Version="1.6">',
+      ' <Layers>',
+      '  <Details>',
+      '   <String Id="Total Laps" Value="1"/>',
+      '   <String Id="Fastest Time" Value=""/>',
+      '   <String Id="Fastest Lap" Value="1"/>',
+      '  </Details>',
+      ' </Layers>',
+      '</LDXFile>',
+    ].join('\n');
+    fs.writeFileSync(outPath, xml, 'utf8');
+    return;
+  }
+
   // Lap times: duration from start of lap[i] to start of lap[i+1]
   // Last lap: from lap[N-1].ts to estimated session end
   const lapTimes = laps.map((lap, i) => {
@@ -35,8 +52,9 @@ function writeLDX(outPath, session) {
 function formatLapTime(seconds) {
   const m = Math.floor(seconds / 60);
   const rem = seconds - m * 60;
-  const s = Math.floor(rem);
-  const ms = Math.round((rem - s) * 1000);
+  let s = Math.floor(rem);
+  let ms = Math.round((rem - s) * 1000);
+  if (ms === 1000) { ms = 0; s += 1; }
   return `${m}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
 }
 

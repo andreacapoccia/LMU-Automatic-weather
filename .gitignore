@@ -1,6 +1,7 @@
 # Build artifacts & deps
 app/node_modules/
 app/dist/
+DuckDBtoMoTeC/converter/node_modules/
 app/dist-portable/
 app/_lfm_patch_stage/
 

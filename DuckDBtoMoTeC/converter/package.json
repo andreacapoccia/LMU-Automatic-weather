@@ -1,0 +1,13 @@
+{
+  "name": "lmu-motec-converter",
+  "version": "1.0.0",
+  "description": "Convert LMU DuckDB telemetry to MoTeC .ld/.ldx",
+  "main": "convert.js",
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "duckdb": "^1.1.0"
+  }
+}

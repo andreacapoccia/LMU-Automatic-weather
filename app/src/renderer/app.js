@@ -921,4 +921,511 @@ document.addEventListener('DOMContentLoaded', () => {
     loadInstall();
     pollStatus();
     setInterval(pollStatus, 5000);
+
+    // Telemetry + drawer boot
+    initTelemetry();
+    initDrawer();
 });
+
+// ───────── Tab switching ─────────
+function switchView(name) {
+    const launcher = $('viewLauncher');
+    const telemetry = $('viewTelemetry');
+    document.querySelectorAll('.tab').forEach((t) => {
+        const active = t.dataset.view === name;
+        t.classList.toggle('active', active);
+        t.setAttribute('aria-selected', String(active));
+    });
+    if (name === 'launcher') {
+        launcher.style.display = 'grid';
+        telemetry.style.display = 'none';
+    } else {
+        launcher.style.display = 'none';
+        telemetry.style.display = 'grid';
+    }
+}
+
+// ───────── Settings drawer ─────────
+function initDrawer() {
+    const drawer = $('settingsDrawer');
+    const backdrop = $('drawerBackdrop');
+    const navBtns = document.querySelectorAll('#drawerNav button[data-sec]');
+    const sections = document.querySelectorAll('.drawer-section[data-sec]');
+    const toast = $('savedToast');
+    let toastTimer;
+
+    function openDrawer(secId) {
+        drawer.classList.add('open');
+        backdrop.classList.add('open');
+        if (secId) selectSection(secId);
+    }
+    function closeDrawer() {
+        drawer.classList.remove('open');
+        backdrop.classList.remove('open');
+    }
+    function selectSection(id) {
+        navBtns.forEach((b) => b.classList.toggle('active', b.dataset.sec === id));
+        sections.forEach((s) => s.classList.toggle('active', s.dataset.sec === id));
+        const content = $('drawerContent');
+        if (content) content.scrollTop = 0;
+    }
+
+    window._openDrawer = openDrawer;
+
+    function flashSaved() {
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 1100);
+    }
+
+    $('settingsBtn').addEventListener('click', () => openDrawer('auto'));
+    $('drawerClose').addEventListener('click', closeDrawer);
+    backdrop.addEventListener('click', closeDrawer);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && drawer.classList.contains('open')) closeDrawer();
+    });
+
+    navBtns.forEach((b) => b.addEventListener('click', () => selectSection(b.dataset.sec)));
+
+    // Switches
+    document.querySelectorAll('.s-switch').forEach((sw) => {
+        sw.addEventListener('click', async () => {
+            sw.classList.toggle('on');
+            sw.setAttribute('aria-checked', sw.classList.contains('on'));
+            flashSaved();
+            // Auto-enable switch triggers watcher
+            if (sw.id === 'setAutoEnable') {
+                const on = sw.classList.contains('on');
+                await window.go.setSetting('watcherEnabled', on);
+                if (on) {
+                    await startWatcher();
+                } else {
+                    await stopWatcher();
+                }
+            }
+        });
+    });
+
+    // Segmented controls (output mode)
+    const outMode = $('setOutMode');
+    if (outMode) {
+        outMode.querySelectorAll('button').forEach((b) => {
+            b.addEventListener('click', async () => {
+                outMode.querySelectorAll('button').forEach((x) => x.classList.remove('active'));
+                b.classList.add('active');
+                const custom = b.dataset.v === 'custom';
+                $('setOutCustomRow').style.display = custom ? '' : 'none';
+                await window.go.setSetting('outputMode', b.dataset.v);
+                flashSaved();
+            });
+        });
+    }
+
+    // Browse buttons
+    const browseWatchPath = $('browseWatchPath');
+    if (browseWatchPath) {
+        browseWatchPath.addEventListener('click', async () => {
+            const result = await window.go.pickFolder({ title: 'Select watch folder' });
+            if (result.canceled) return;
+            $('setWatchPath').value = result.path;
+            await window.go.setSetting('watchDir', result.path);
+            updateWatcherCard();
+            flashSaved();
+        });
+    }
+
+    const browseOutPath = $('browseOutPath');
+    if (browseOutPath) {
+        browseOutPath.addEventListener('click', async () => {
+            const result = await window.go.pickFolder({ title: 'Select output folder' });
+            if (result.canceled) return;
+            $('setOutPath').value = result.path;
+            await window.go.setSetting('outputDir', result.path);
+            flashSaved();
+        });
+    }
+
+    const browseMotecExe = $('browseMotecExe');
+    if (browseMotecExe) {
+        browseMotecExe.addEventListener('click', async () => {
+            const result = await window.go.pickFile({
+                title: 'Select MoTeC i2 executable',
+                filters: [{ name: 'Executables', extensions: ['exe'] }],
+            });
+            if (result.canceled) return;
+            $('setMotecExe').value = result.path;
+            await window.go.setSetting('motecExe', result.path);
+            flashSaved();
+        });
+    }
+}
+
+// ───────── Telemetry state ─────────
+const tlmState = {
+    sessions: [],      // { ldPath, ldxPath, track, car, cls, fastest, laps, date, status }
+    watcherRunning: false,
+    filterStatus: 'all',
+    searchQuery: '',
+};
+
+// ───────── Telemetry boot ─────────
+async function initTelemetry() {
+    // Tab switching
+    document.querySelectorAll('.tab').forEach((t) => {
+        t.addEventListener('click', () => switchView(t.dataset.view));
+    });
+
+    // Load saved settings into drawer
+    const watchDir = await window.go.getSetting('watchDir') || '';
+    const outputMode = await window.go.getSetting('outputMode') || 'same';
+    const outputDir = await window.go.getSetting('outputDir') || '';
+    const motecExe = await window.go.getSetting('motecExe') || '';
+    const watcherEnabled = await window.go.getSetting('watcherEnabled') || false;
+
+    const setWatchPath = $('setWatchPath');
+    if (setWatchPath) setWatchPath.value = watchDir;
+    const setOutPath = $('setOutPath');
+    if (setOutPath) setOutPath.value = outputDir;
+    const setMotecExe = $('setMotecExe');
+    if (setMotecExe) setMotecExe.value = motecExe;
+
+    // Output mode segmented control
+    const outMode = $('setOutMode');
+    if (outMode) {
+        outMode.querySelectorAll('button').forEach((b) => {
+            b.classList.toggle('active', b.dataset.v === outputMode);
+        });
+        $('setOutCustomRow').style.display = outputMode === 'custom' ? '' : 'none';
+    }
+
+    // Enable switch
+    const enableSwitch = $('setAutoEnable');
+    if (enableSwitch && watcherEnabled) {
+        enableSwitch.classList.add('on');
+        enableSwitch.setAttribute('aria-checked', 'true');
+    }
+
+    updateWatcherCard();
+
+    // First-run card: show if no watch folder configured
+    const firstRunCard = $('firstRunCard');
+    if (firstRunCard) {
+        const dismissed = await window.go.getSetting('firstRunDismissed') || false;
+        firstRunCard.style.display = (!watchDir && !dismissed) ? '' : 'none';
+    }
+
+    $('firstRunCta').addEventListener('click', () => { if (window._openDrawer) window._openDrawer('auto'); });
+    $('firstRunDismiss').addEventListener('click', async () => {
+        $('firstRunCard').style.display = 'none';
+        await window.go.setSetting('firstRunDismissed', true);
+    });
+
+    // Dropzone
+    const dz = $('tlmDrop');
+    if (dz) {
+        ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => {
+            e.preventDefault();
+            dz.classList.add('is-drag');
+        }));
+        ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, (e) => {
+            e.preventDefault();
+            dz.classList.remove('is-drag');
+            if (ev === 'drop' && e.dataTransfer.files.length) {
+                const file = e.dataTransfer.files[0];
+                if (file.path && file.path.endsWith('.duckdb')) {
+                    runConversion(file.path);
+                }
+            }
+        }));
+    }
+
+    $('tlmChooseFile').addEventListener('click', async () => {
+        const result = await window.go.pickFile({
+            title: 'Select DuckDB session file',
+            filters: [{ name: 'DuckDB files', extensions: ['duckdb'] }],
+        });
+        if (!result.canceled) runConversion(result.path);
+    });
+
+    // Watcher card toggle
+    $('watcherToggle').addEventListener('click', async () => {
+        const on = !tlmState.watcherRunning;
+        if (on) {
+            await startWatcher();
+        } else {
+            await stopWatcher();
+        }
+    });
+
+    $('wcConfigure').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window._openDrawer) window._openDrawer('auto');
+    });
+
+    // Search + filter
+    $('tlmSearch').addEventListener('input', (e) => {
+        tlmState.searchQuery = e.target.value;
+        renderSessionsGrid();
+    });
+    document.querySelectorAll('.filter-chip').forEach((c) => {
+        c.addEventListener('click', () => {
+            document.querySelectorAll('.filter-chip').forEach((x) => x.classList.remove('active'));
+            c.classList.add('active');
+            tlmState.filterStatus = c.dataset.filter;
+            renderSessionsGrid();
+        });
+    });
+
+    // Convert log feed
+    window.go.onConvertLog((line) => {
+        const logEl = $('convertLog');
+        if (logEl) {
+            try {
+                const msg = JSON.parse(line);
+                if (msg.type === 'done') {
+                    logEl.textContent += `✓ ${msg.ld || ''}\n`;
+                    if (msg.ld) addSession(msg.ld, 'ok');
+                } else if (msg.type === 'start') {
+                    logEl.textContent += `→ ${msg.file || ''}\n`;
+                    updateActiveConv(0, 'Reading DuckDB');
+                    showActiveConv(true);
+                } else if (msg.type === 'progress') {
+                    const step = msg.step;
+                    const pct = step === 'read' ? 33 : step === 'ld' ? 66 : 90;
+                    const stage = step === 'read' ? 'Mapping channels' : step === 'ld' ? 'Writing .ld' : 'Writing .ldx';
+                    updateActiveConv(pct, stage);
+                }
+            } catch (_) {
+                logEl.textContent += line + '\n';
+            }
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+    });
+
+    // Auto-start watcher if enabled
+    if (watcherEnabled && watchDir) {
+        await startWatcher();
+    }
+
+    renderSessionsGrid();
+}
+
+// ───────── Watcher helpers ─────────
+async function startWatcher() {
+    const watchDir = await window.go.getSetting('watchDir') || '';
+    if (!watchDir) {
+        if (window._openDrawer) window._openDrawer('auto');
+        return;
+    }
+    const outputMode = await window.go.getSetting('outputMode') || 'same';
+    const outputDir = outputMode === 'custom' ? (await window.go.getSetting('outputDir') || watchDir) : watchDir;
+    const result = await window.go.startWatch(watchDir, outputDir);
+    if (result?.ok !== false) {
+        tlmState.watcherRunning = true;
+        updateWatcherToggle(true);
+        updateWatcherPill(true, watchDir);
+    }
+}
+
+async function stopWatcher() {
+    await window.go.stopWatch();
+    tlmState.watcherRunning = false;
+    updateWatcherToggle(false);
+    updateWatcherPill(false, '');
+}
+
+function updateWatcherToggle(on) {
+    const btn = $('watcherToggle');
+    if (!btn) return;
+    btn.classList.toggle('is-on', on);
+    btn.setAttribute('aria-pressed', String(on));
+    const txt = $('watcherStateText');
+    if (txt) txt.textContent = on ? 'WATCHING' : 'OFF';
+}
+
+function updateWatcherPill(on, watchDir) {
+    const pill = $('watcherStatusPill');
+    if (!pill) return;
+    if (on) {
+        pill.style.display = '';
+        pill.classList.remove('offline');
+        const txt = pill.querySelector('.status-text');
+        if (txt) txt.textContent = 'Watcher · watching';
+    } else {
+        pill.style.display = 'none';
+    }
+}
+
+function updateWatcherCard() {
+    window.go.getSetting('watchDir').then((watchDir) => {
+        const pathEl = $('wcPath');
+        if (pathEl) pathEl.textContent = watchDir || 'No folder configured';
+    });
+}
+
+// ───────── Conversion runner ─────────
+async function runConversion(inputPath) {
+    const outputMode = await window.go.getSetting('outputMode') || 'same';
+    let outputDir;
+    if (outputMode === 'custom') {
+        outputDir = await window.go.getSetting('outputDir') || '';
+        if (!outputDir) {
+            outputDir = inputPath.substring(0, inputPath.lastIndexOf('\\')) ||
+                        inputPath.substring(0, inputPath.lastIndexOf('/'));
+        }
+    } else {
+        outputDir = inputPath.substring(0, inputPath.lastIndexOf('\\')) ||
+                    inputPath.substring(0, inputPath.lastIndexOf('/'));
+    }
+
+    showActiveConv(true);
+    updateActiveConv(0, 'Reading DuckDB');
+
+    try {
+        const results = await window.go.convertRun(inputPath, outputDir);
+        showActiveConv(false);
+        const done = results.find((r) => r.type === 'done');
+        if (done && done.ld) {
+            addSession(done.ld, 'ok');
+        }
+    } catch (e) {
+        showActiveConv(false);
+        addSession(inputPath, 'err');
+    }
+}
+
+function showActiveConv(show) {
+    const panel = $('activeConvPanel');
+    if (panel) panel.style.display = show ? '' : 'none';
+}
+
+function updateActiveConv(pct, stage) {
+    const fill = $('activeFill');
+    const pctEl = $('activePct');
+    const stageEl = $('activeStage');
+    if (fill) fill.style.width = pct + '%';
+    if (pctEl) pctEl.textContent = pct + '%';
+    if (stageEl) stageEl.textContent = stage;
+}
+
+// ───────── Sessions list ─────────
+function addSession(ldPath, status) {
+    const existing = tlmState.sessions.findIndex((s) => s.ldPath === ldPath);
+    const baseName = ldPath.replace(/\\/g, '/').split('/').pop().replace(/\.ld$/i, '');
+    const session = {
+        ldPath,
+        ldxPath: ldPath.replace(/\.ld$/i, '.ldx'),
+        baseName,
+        track: baseName,
+        car: '',
+        cls: '',
+        fastest: '—',
+        laps: 0,
+        date: new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        status,
+    };
+    if (existing >= 0) {
+        tlmState.sessions[existing] = session;
+    } else {
+        tlmState.sessions.unshift(session);
+    }
+    renderSessionsGrid();
+    updateTlmSummary();
+}
+
+function tagFor(status) {
+    if (status === 'ok')  return '<span class="t-tag ok">.LD · .LDX</span>';
+    if (status === 'err') return '<span class="t-tag err">FAILED</span>';
+    if (status === 'run') return '<span class="t-tag run">CONVERTING</span>';
+    return '';
+}
+
+function renderSessionsGrid() {
+    const grid = $('sessionsGrid');
+    if (!grid) return;
+    // Remove existing rows (keep grid-head)
+    [...grid.querySelectorAll('.session-row, .row-progress')].forEach((n) => n.remove());
+
+    const q = tlmState.searchQuery.trim().toLowerCase();
+    let list = tlmState.sessions;
+    if (tlmState.filterStatus !== 'all') list = list.filter((s) => s.status === tlmState.filterStatus);
+    if (q) list = list.filter((s) => (s.baseName + ' ' + s.track + ' ' + s.car).toLowerCase().includes(q));
+
+    const emptyEl = $('tlmEmpty');
+    if (list.length === 0) {
+        if (emptyEl) emptyEl.style.display = '';
+        return;
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    for (const s of list) {
+        const row = document.createElement('div');
+        row.className = 'session-row';
+        row.dataset.ldPath = s.ldPath;
+        row.innerHTML = `
+            <div class="cell">
+                <div class="cell-track">
+                    <div class="t-name">${s.baseName.replace(/</g,'&lt;')} ${tagFor(s.status)}</div>
+                    <div class="t-sub"><span class="driver">${s.track.replace(/</g,'&lt;') || '—'}</span></div>
+                </div>
+            </div>
+            <div class="cell">
+                <div class="cell-car">
+                    <div class="car-name">${s.car.replace(/</g,'&lt;') || '—'}</div>
+                    <div class="car-class">${s.cls.replace(/</g,'&lt;') || ''}</div>
+                </div>
+            </div>
+            <div class="cell cell-fastest">${s.fastest.replace(/</g,'&lt;')}</div>
+            <div class="cell cell-laps">${s.laps}</div>
+            <div class="cell">
+                <div class="cell-date">
+                    <span class="d-day">${s.date}</span>
+                </div>
+            </div>
+            <div class="cell cell-actions">
+                <button class="act-btn primary" data-action="open" title="Open in MoTeC i2">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                </button>
+                <button class="act-btn" data-action="reveal" title="Reveal in folder">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                </button>
+                <button class="act-btn danger" data-action="delete" title="Delete output">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                </button>
+            </div>
+        `;
+        row.querySelectorAll('[data-action]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleSessionAction(btn.dataset.action, s);
+            });
+        });
+        grid.appendChild(row);
+    }
+}
+
+async function handleSessionAction(action, session) {
+    if (action === 'open') {
+        await window.go.motecOpen(session.ldPath);
+    } else if (action === 'reveal') {
+        await window.go.revealInFolder(session.ldPath);
+    } else if (action === 'delete') {
+        if (!confirm(`Delete ${session.baseName}.ld and .ldx?`)) return;
+        const result = await window.go.deleteConversion(session.ldPath);
+        if (result.ok) {
+            tlmState.sessions = tlmState.sessions.filter((s) => s.ldPath !== session.ldPath);
+            renderSessionsGrid();
+            updateTlmSummary();
+        }
+    }
+}
+
+function updateTlmSummary() {
+    const totalEl = $('tlmTotalSessions');
+    if (totalEl) totalEl.textContent = tlmState.sessions.length;
+    const lapsEl = $('tlmTotalLaps');
+    if (lapsEl) {
+        const total = tlmState.sessions.reduce((acc, s) => acc + (s.laps || 0), 0);
+        lapsEl.textContent = total || '—';
+    }
+}

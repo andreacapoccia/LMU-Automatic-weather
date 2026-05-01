@@ -18,6 +18,10 @@
                 <span class="brand-divider"></span>
                 <span class="brand-tag">LMU Launcher · <em>v2.0.0</em></span>
             </div>
+            <nav class="tabs" role="tablist">
+                <button class="tab active" data-view="launcher" role="tab" aria-selected="true">Launcher</button>
+                <button class="tab" data-view="telemetry" role="tab" aria-selected="false">Telemetry</button>
+            </nav>
             <div class="topbar-right">
                 <div class="install-pill" id="installPill">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -37,10 +41,17 @@
                     <img src="../../assets/GO Fast logo.png" alt="" aria-hidden="true" style="height:14px;width:auto;opacity:0.85;" />
                     <span class="status-text">GO Fast offline</span>
                 </div>
+                <div class="status-pill offline" id="watcherStatusPill" style="display:none;">
+                    <span class="dot"></span>
+                    <span class="status-text">Watcher · 1 folder</span>
+                </div>
+                <button type="button" class="icon-btn" id="settingsBtn" title="Settings" aria-label="Open settings">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
             </div>
         </header>
 
-        <main class="layout">
+        <main class="layout view layout-view" id="viewLauncher">
             <!-- TRACK -->
             <section class="panel panel-track">
                 <div class="panel-header">
@@ -375,6 +386,100 @@
             </section>
         </main>
 
+        <!-- TELEMETRY VIEW -->
+        <main class="tlm-layout view telemetry-view" id="viewTelemetry" style="display:none;">
+
+            <!-- First-run card (shown when no watch folder configured) -->
+            <div class="first-run-card" id="firstRunCard" style="display:none;">
+                <div class="frc-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+                </div>
+                <div class="frc-text">
+                    <div class="frc-title">Set up auto-converter</div>
+                    <div class="frc-sub">Point GO at your LMU telemetry folder and it will convert new sessions to MoTeC format automatically.</div>
+                </div>
+                <button class="frc-cta" id="firstRunCta">Configure</button>
+                <button class="frc-dismiss" id="firstRunDismiss" title="Dismiss">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <!-- Top row: drop zone + watcher card -->
+            <div class="panel-drop">
+                <div class="dropzone" id="tlmDrop">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <div class="dz-label">Drop <code>.duckdb</code> here</div>
+                    <div class="dz-sub">or</div>
+                    <button class="dz-btn" id="tlmChooseFile">Choose file…</button>
+                </div>
+
+                <div class="watcher-card" id="watcherCard">
+                    <div class="wc-head">
+                        <div class="wc-info">
+                            <div class="wc-title">Auto-converter</div>
+                            <div class="wc-path" id="wcPath">No folder configured</div>
+                        </div>
+                        <div class="wc-controls">
+                            <button class="wc-configure" id="wcConfigure" title="Configure">Configure</button>
+                            <button class="wc-toggle" id="watcherToggle" aria-pressed="false">
+                                <span class="wt-state" id="watcherStateText">OFF</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary strip -->
+            <div class="panel-summary">
+                <div class="summary-stat">
+                    <span class="ss-val" id="tlmTotalSessions">0</span>
+                    <span class="ss-lbl">Sessions</span>
+                </div>
+                <div class="summary-stat">
+                    <span class="ss-val" id="tlmTotalLaps">—</span>
+                    <span class="ss-lbl">Laps</span>
+                </div>
+                <div class="summary-stat">
+                    <span class="ss-val" id="tlmFastest">—</span>
+                    <span class="ss-lbl">Fastest</span>
+                </div>
+                <div class="active-conv" id="activeConvPanel" style="display:none;">
+                    <div class="ac-label">Converting…</div>
+                    <div class="ac-bar"><i id="activeFill" style="width:0%"></i></div>
+                    <div class="ac-pct" id="activePct">0%</div>
+                    <div class="ac-stage" id="activeStage">Reading DuckDB</div>
+                </div>
+            </div>
+
+            <!-- Sessions panel -->
+            <div class="panel-sessions">
+                <div class="sessions-toolbar">
+                    <input class="tlm-search" id="tlmSearch" type="search" placeholder="Search sessions…" />
+                    <div class="filter-chips">
+                        <button class="filter-chip active" data-filter="all">All</button>
+                        <button class="filter-chip" data-filter="ok">Converted</button>
+                        <button class="filter-chip" data-filter="err">Failed</button>
+                    </div>
+                </div>
+                <div class="sessions-grid" id="sessionsGrid">
+                    <div class="grid-head">
+                        <div class="gh-cell">Session</div>
+                        <div class="gh-cell">Car</div>
+                        <div class="gh-cell">Fastest</div>
+                        <div class="gh-cell">Laps</div>
+                        <div class="gh-cell">Date</div>
+                        <div class="gh-cell"></div>
+                    </div>
+                </div>
+                <div class="tlm-empty" id="tlmEmpty" style="display:none;">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <div>No sessions yet</div>
+                    <div class="tlm-empty-sub">Drop a .duckdb file above to convert it</div>
+                </div>
+            </div>
+
+        </main>
+
         <footer class="footer">
             <div class="footer-meta">
                 <span>GO Setups · Le Mans Ultimate</span>
@@ -384,6 +489,134 @@
                 <span>v1.0.0</span>
             </div>
         </footer>
+
+        <!-- SETTINGS DRAWER -->
+        <div class="drawer-backdrop" id="drawerBackdrop"></div>
+        <aside class="drawer" id="settingsDrawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+            <div class="drawer-head">
+                <div>
+                    <div class="eyebrow">Preferences</div>
+                    <h2 id="drawerTitle">Settings</h2>
+                </div>
+                <button type="button" class="icon-btn" id="drawerClose" title="Close" aria-label="Close settings">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="drawer-body">
+                <nav class="drawer-nav" id="drawerNav">
+                    <div class="drawer-nav-section">Telemetry</div>
+                    <button data-sec="auto" class="active">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+                        Auto-converter
+                    </button>
+                    <button data-sec="motec">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        MoTeC i2
+                    </button>
+                    <div class="drawer-nav-section">System</div>
+                    <button data-sec="about">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+                        About &amp; logs
+                    </button>
+                </nav>
+
+                <div class="drawer-content" id="drawerContent">
+
+                    <!-- AUTO-CONVERTER -->
+                    <section class="drawer-section active" data-sec="auto">
+                        <h3>Auto-converter</h3>
+                        <p class="section-desc">Watch a folder for new <code>.duckdb</code> sessions from LMU and convert them to MoTeC i2 format automatically.</p>
+
+                        <div class="setting-group">
+                            <div class="setting-row">
+                                <div class="setting-label">
+                                    <span class="lbl">Enable auto-converter</span>
+                                    <span class="hint">Master switch. When off, the watcher stops and no files are converted.</span>
+                                </div>
+                                <div class="s-switch" id="setAutoEnable" role="switch" aria-checked="false"></div>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <div class="setting-row stack">
+                                <div class="setting-label">
+                                    <span class="lbl">Watch folder</span>
+                                    <span class="hint">GO checks this folder for new sessions. Defaults to LMU's <code>UserData\Replays</code>.</span>
+                                </div>
+                                <div class="s-path-row">
+                                    <input class="s-input mono" id="setWatchPath" placeholder="Not configured" readonly />
+                                    <button class="s-btn" id="browseWatchPath">Browse…</button>
+                                </div>
+                            </div>
+
+                            <div class="setting-row stack">
+                                <div class="setting-label">
+                                    <span class="lbl">Output folder</span>
+                                    <span class="hint">Where converted <code>.ld</code> + <code>.ldx</code> files are written.</span>
+                                </div>
+                                <div class="s-seg" id="setOutMode">
+                                    <button class="active" data-v="same">Same folder as source</button>
+                                    <button data-v="custom">Custom folder…</button>
+                                </div>
+                            </div>
+
+                            <div class="setting-row stack" id="setOutCustomRow" style="display:none;">
+                                <div class="setting-label">
+                                    <span class="lbl">Custom output path</span>
+                                </div>
+                                <div class="s-path-row">
+                                    <input class="s-input mono" id="setOutPath" placeholder="Not configured" readonly />
+                                    <button class="s-btn" id="browseOutPath">Browse…</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- MOTEC -->
+                    <section class="drawer-section" data-sec="motec">
+                        <h3>MoTeC i2</h3>
+                        <p class="section-desc">GO uses MoTeC i2 to open converted files. Point us at your installation.</p>
+
+                        <div class="setting-group">
+                            <div class="setting-row stack">
+                                <div class="setting-label">
+                                    <span class="lbl">i2 executable</span>
+                                    <span class="hint">Usually <code>C:\Program Files\MoTeC\i2 1.1\i2.exe</code>.</span>
+                                </div>
+                                <div class="s-path-row">
+                                    <input class="s-input mono" id="setMotecExe" placeholder="Not configured" readonly />
+                                    <button class="s-btn" id="browseMotecExe">Browse…</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ABOUT -->
+                    <section class="drawer-section" data-sec="about">
+                        <h3>About &amp; logs</h3>
+                        <p class="section-desc">Version info and diagnostic tools.</p>
+
+                        <div class="setting-group">
+                            <div class="about-row"><span>Version</span><span>2.0.0</span></div>
+                            <div class="about-row"><span>Channel</span><span>stable</span></div>
+                        </div>
+
+                        <div class="setting-group">
+                            <div class="setting-row">
+                                <div class="setting-label">
+                                    <span class="lbl">Conversion log</span>
+                                    <span class="hint">Shows the last conversion output.</span>
+                                </div>
+                            </div>
+                            <div class="convert-log" id="convertLog"></div>
+                        </div>
+                    </section>
+
+                </div>
+            </div>
+        </aside>
+
+        <div class="saved-toast" id="savedToast"><span class="dot"></span><span>Saved</span></div>
 
         <script src="app.js"></script>
     </body>

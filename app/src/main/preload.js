@@ -23,4 +23,11 @@ contextBridge.exposeInMainWorld('go', {
         ipcRenderer.on('convert:log', listener);
         return () => ipcRenderer.removeListener('convert:log', listener);
     },
+    pickFolder: (opts) => ipcRenderer.invoke('dialog:pickFolder', opts),
+    pickFile: (opts) => ipcRenderer.invoke('dialog:pickFile', opts),
+    motecOpen: (ldPath) => ipcRenderer.invoke('motec:open', ldPath),
+    revealInFolder: (filePath) => ipcRenderer.invoke('shell:reveal', filePath),
+    deleteConversion: (ldPath) => ipcRenderer.invoke('convert:delete', ldPath),
+    getSetting: (key) => ipcRenderer.invoke('settings:get', key),
+    setSetting: (key, value) => ipcRenderer.invoke('settings:set', key, value),
 });

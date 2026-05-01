@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { execFile, spawn } = require('child_process');
 
 const launcher = require('./lmu-launcher');
@@ -179,3 +180,51 @@ ipcMain.handle('convert:stopWatch', () => {
     if (watcherProcess) { watcherProcess.kill(); watcherProcess = null; }
     return { stopped: true };
 });
+
+ipcMain.handle('dialog:pickFolder', async (_e, { title } = {}) => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        title: title || 'Select folder',
+        properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths?.length) return { canceled: true };
+    return { canceled: false, path: result.filePaths[0] };
+});
+
+ipcMain.handle('dialog:pickFile', async (_e, { title, filters } = {}) => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        title: title || 'Select file',
+        properties: ['openFile'],
+        filters: filters || [],
+    });
+    if (result.canceled || !result.filePaths?.length) return { canceled: true };
+    return { canceled: false, path: result.filePaths[0] };
+});
+
+ipcMain.handle('motec:open', async (_e, ldPath) => {
+    const motecExe = settings.get('motecExe', '');
+    if (!motecExe) return { ok: false, error: 'MoTeC i2 path not configured' };
+    try {
+        spawn(motecExe, [ldPath], { detached: true, stdio: 'ignore' }).unref();
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
+ipcMain.handle('shell:reveal', async (_e, filePath) => {
+    shell.showItemInFolder(filePath);
+    return { ok: true };
+});
+
+ipcMain.handle('convert:delete', async (_e, ldPath) => {
+    const ldx = ldPath.replace(/\.ld$/i, '.ldx');
+    const errors = [];
+    for (const f of [ldPath, ldx]) {
+        try { fs.unlinkSync(f); } catch (e) { if (e.code !== 'ENOENT') errors.push(e.message); }
+    }
+    if (errors.length) return { ok: false, error: errors.join(', ') };
+    return { ok: true };
+});
+
+ipcMain.handle('settings:get', (_e, key) => settings.get(key));
+ipcMain.handle('settings:set', (_e, key, value) => { settings.set(key, value); return { ok: true }; });

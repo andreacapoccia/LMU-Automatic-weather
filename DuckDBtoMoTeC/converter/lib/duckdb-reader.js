@@ -135,8 +135,9 @@ async function readSession(dbPath) {
         for (let k = prevSi + 3; k < si; k++) beaconData[k] = 100;
       }
       beaconData[si] = -8192;                                            // 0xE000 marker
-      if (si + 1 < nBeacon) beaconData[si + 1] = -32755 + crossingCount; // crossing ID
-      if (si + 2 < nBeacon) beaconData[si + 2] = Math.round((t - Math.floor(t)) * 100);
+      if (si + 1 < nBeacon) beaconData[si + 1] = -32754 + crossingCount; // crossing ID (starts at -32754, matching reference format)
+      // Sub-second precision: reverse-engineered formula from working .ld files: round(fraction * 978 + 16388)
+      if (si + 2 < nBeacon) beaconData[si + 2] = Math.round((t - Math.floor(t)) * 978 + 16388);
       prevSi = si;
       crossingCount++;
     }

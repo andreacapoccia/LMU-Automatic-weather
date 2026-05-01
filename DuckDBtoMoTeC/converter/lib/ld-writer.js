@@ -102,6 +102,23 @@ function writeLD(outPath, session) {
     wstr(buf, ch.shortName || '', off + 64, 8);
     wstr(buf, ch.unit || '', off + 72, 12);
 
+    // Bytes 84-91: channel data range [max, min] — required by MoTeC i2 for channel processing.
+    // Int16 channels store as int32 LE; float32 channels store as float32 LE.
+    {
+      let maxV = -Infinity, minV = Infinity;
+      for (const v of ch.data) {
+        if (v > maxV) maxV = v;
+        if (v < minV) minV = v;
+      }
+      if (ch.dtype === 'int16') {
+        buf.writeInt32LE(maxV, off + 84);
+        buf.writeInt32LE(minV, off + 88);
+      } else {
+        buf.writeFloatLE(maxV, off + 84);
+        buf.writeFloatLE(minV, off + 88);
+      }
+    }
+
     curDataPtr += dataSizes[i];
   }
 

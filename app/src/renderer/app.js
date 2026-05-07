@@ -1045,6 +1045,40 @@ function initDrawer() {
             flashSaved();
         });
     }
+
+    // Output naming tokens
+    const namingInput = $('setNaming');
+    const namingPreview = $('setNamingPreview');
+    function updateNamingPreview() {
+        if (!namingInput || !namingPreview) return;
+        const sample = {
+            '{date}': '2025-05-01', '{time}': '14-22', '{track}': 'Spa-Francorchamps',
+            '{layout}': 'GP', '{car}': 'Ferrari-296-LMGT3', '{class}': 'LMGT3',
+            '{driver}': 'Mateo-R', '{session}': 'Practice',
+        };
+        let out = namingInput.value;
+        Object.entries(sample).forEach(([k, v]) => { out = out.replaceAll(k, v); });
+        namingPreview.innerHTML = 'Preview · <b>' + (out || 'session') + '.ld</b>';
+    }
+    if (namingInput) {
+        namingInput.addEventListener('input', () => {
+            updateNamingPreview();
+            window.go.setSetting('outputNamingTemplate', namingInput.value);
+            flashSaved();
+        });
+    }
+    document.querySelectorAll('.token-chip').forEach((chip) => {
+        chip.addEventListener('click', () => {
+            if (!namingInput) return;
+            const pos = namingInput.selectionStart != null ? namingInput.selectionStart : namingInput.value.length;
+            namingInput.value = namingInput.value.slice(0, pos) + chip.dataset.tok + namingInput.value.slice(pos);
+            updateNamingPreview();
+            window.go.setSetting('outputNamingTemplate', namingInput.value);
+            flashSaved();
+            namingInput.focus();
+        });
+    });
+    updateNamingPreview();
 }
 
 // ───────── Telemetry state ─────────
@@ -1068,6 +1102,7 @@ async function initTelemetry() {
     const outputDir = await window.go.getSetting('outputDir') || '';
     const motecExe = await window.go.getSetting('motecExe') || '';
     const watcherEnabled = await window.go.getSetting('watcherEnabled') || false;
+    const namingTemplate = await window.go.getSetting('outputNamingTemplate') || '';
 
     const setWatchPath = $('setWatchPath');
     if (setWatchPath) setWatchPath.value = watchDir;
@@ -1075,6 +1110,8 @@ async function initTelemetry() {
     if (setOutPath) setOutPath.value = outputDir;
     const setMotecExe = $('setMotecExe');
     if (setMotecExe) setMotecExe.value = motecExe;
+    const setNamingEl = $('setNaming');
+    if (setNamingEl && namingTemplate) setNamingEl.value = namingTemplate;
 
     // Output mode segmented control
     const outMode = $('setOutMode');

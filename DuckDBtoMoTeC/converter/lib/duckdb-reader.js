@@ -116,6 +116,7 @@ async function readSession(dbPath) {
       dtype: 'int16',
       shift: 32760,
       flag100: 0x0100, // "lap-related channel" flag at header byte 101 — required for MoTeC i2 lap detection
+      chanId: 2101,    // MoTeC well-known ID for Lap Number channel
     });
 
     // Beacon (Internal) at 1 Hz. Starts at 0 before first crossing, then
@@ -146,7 +147,12 @@ async function readSession(dbPath) {
     if (prevSi >= 0) {
       for (let k = prevSi + 3; k < nBeacon; k++) beaconData[k] = 100;
     }
-    channels.push({ name: 'Beacon (Internal)', shortName: '', unit: '', freq: beaconFreq, data: beaconData, dtype: 'int16' });
+    channels.push({ name: 'Beacon (Internal)', shortName: '', unit: '', freq: beaconFreq, data: beaconData, dtype: 'int16', chanId: 110 });
+
+    // Marker channel: 1 Hz int16 zeros. Required by MoTeC for lap-detection
+    // alongside Beacon and Lap Number (chanId 310 in MoTeC's registry).
+    const markerData = new Array(nBeacon).fill(0);
+    channels.push({ name: 'Marker', shortName: '', unit: '', freq: 1, data: markerData, dtype: 'int16', chanId: 310, flag100: 0x0100 });
 
     return { sessionStart, sessionDuration, laps, meta, channels, totalSamples100Hz };
   } finally {

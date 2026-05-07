@@ -50,7 +50,7 @@ function writeLD(outPath, session) {
   buf.writeUInt16LE(2, 64);              // matches MoTeC reference (was 1)
   buf.writeUInt16LE(0x4240, 66);
   buf.writeUInt16LE(0xf, 68);
-  buf.writeUInt32LE(0x1f44, 70);
+  buf.writeUInt32LE(0x1f44, 70);         // reverted from 0x2ee7 — that value broke channel data display
   wstr(buf, 'ADL', 74, 8);
   buf.writeUInt16LE(200, 82);            // matches MoTeC reference (was 420)
   buf.writeUInt16LE(0x80, 84);           // matches MoTeC reference (was 0xadb0)
@@ -62,7 +62,7 @@ function writeLD(outPath, session) {
   wstr(buf, meta.DriverName || '', 158, 64);
   wstr(buf, meta.CarName || '', 222, 64);
   wstr(buf, meta.TrackName || '', 350, 64);
-  buf.writeUInt32LE(0xc81a4, 1502);
+  buf.writeUInt32LE(0xc81a4, 1502);      // reverted from 0xd20822 — that value broke channel data display
 
   // --- ldVehicle at VEHICLE_PTR ---
   wstr(buf, meta.CarName || '', VEHICLE_PTR, 64);
@@ -92,7 +92,9 @@ function writeLD(outPath, session) {
     buf.writeUInt32LE(nextMeta, off + 4);
     buf.writeUInt32LE(curDataPtr, off + 8);
     buf.writeUInt32LE(ch.data.length, off + 12);
-    buf.writeUInt16LE(0x2ee1 + i, off + 16);
+    // Channel ID — MoTeC uses well-known IDs to identify special channels
+    // (e.g. 110=Beacon, 310=Marker, 2101=Lap Number). User-defined channels use a generic range.
+    buf.writeUInt16LE(ch.chanId ?? (0x2ee1 + i), off + 16);
     buf.writeUInt16LE(dtypeA, off + 18);
     buf.writeUInt16LE(bps, off + 20);
     buf.writeUInt16LE(ch.freq, off + 22);
@@ -104,21 +106,18 @@ function writeLD(outPath, session) {
     wstr(buf, ch.shortName || '', off + 64, 8);
     wstr(buf, ch.unit || '', off + 72, 12);
 
-    // Bytes 84-91: channel data range [max, min] — required by MoTeC i2 for channel processing.
-    // Int16 channels store as int32 LE; float32 channels store as float32 LE.
-    {
+    // Bytes 84-91: channel data range [max, min] for INT16 channels only.
+    // MoTeC i2 needs this for Beacon/Lap Number lap detection. We deliberately
+    // skip float32 channels — writing real min/max (e.g. Speed max=174 km/h)
+    // breaks MoTeC's display of those channels. Leaving them as zeros is fine.
+    if (ch.dtype === 'int16') {
       let maxV = -Infinity, minV = Infinity;
       for (const v of ch.data) {
         if (v > maxV) maxV = v;
         if (v < minV) minV = v;
       }
-      if (ch.dtype === 'int16') {
-        buf.writeInt32LE(maxV, off + 84);
-        buf.writeInt32LE(minV, off + 88);
-      } else {
-        buf.writeFloatLE(maxV, off + 84);
-        buf.writeFloatLE(minV, off + 88);
-      }
+      buf.writeInt32LE(maxV, off + 84);
+      buf.writeInt32LE(minV, off + 88);
     }
 
     // Bytes 100-101: channel-class flag. 0x0100 = lap-related channel

@@ -1182,28 +1182,44 @@ async function initTelemetry() {
     });
 
     // Convert log feed
+    const logEl = $('convertLog');
     window.go.onConvertLog((line) => {
-        const logEl = $('convertLog');
-        if (logEl) {
-            try {
-                const msg = JSON.parse(line);
+        // 1. UI-agnostic state updates (always run, even if convertLog element absent)
+        try {
+            const msg = JSON.parse(line);
+            if (msg.type === 'done') {
+                if (msg.ld) addSession(msg.ld, 'ok');
+                showActiveConv(false);
+            } else if (msg.type === 'start') {
+                updateActiveConv(0, 'Reading DuckDB');
+                showActiveConv(true);
+            } else if (msg.type === 'progress') {
+                const step = msg.step;
+                const pct = step === 'read' ? 33 : step === 'ld' ? 66 : 90;
+                const stage = step === 'read' ? 'Mapping channels' : step === 'ld' ? 'Writing .ld' : 'Writing .ldx';
+                updateActiveConv(pct, stage);
+            } else if (msg.type === 'error') {
+                if (msg.file) addSession(msg.file, 'err');
+                showActiveConv(false);
+            }
+
+            // 2. Optional logging UI
+            if (logEl) {
                 if (msg.type === 'done') {
                     logEl.textContent += `✓ ${msg.ld || ''}\n`;
-                    if (msg.ld) addSession(msg.ld, 'ok');
                 } else if (msg.type === 'start') {
                     logEl.textContent += `→ ${msg.file || ''}\n`;
-                    updateActiveConv(0, 'Reading DuckDB');
-                    showActiveConv(true);
-                } else if (msg.type === 'progress') {
-                    const step = msg.step;
-                    const pct = step === 'read' ? 33 : step === 'ld' ? 66 : 90;
-                    const stage = step === 'read' ? 'Mapping channels' : step === 'ld' ? 'Writing .ld' : 'Writing .ldx';
-                    updateActiveConv(pct, stage);
+                } else {
+                    logEl.textContent += JSON.stringify(msg) + '\n';
                 }
-            } catch (_) {
-                logEl.textContent += line + '\n';
+                logEl.scrollTop = logEl.scrollHeight;
             }
-            logEl.scrollTop = logEl.scrollHeight;
+        } catch (_) {
+            // non-JSON line — log only if element present
+            if (logEl) {
+                logEl.textContent += line + '\n';
+                logEl.scrollTop = logEl.scrollHeight;
+            }
         }
     });
 

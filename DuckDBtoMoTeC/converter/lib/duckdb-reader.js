@@ -70,8 +70,13 @@ async function readSession(dbPath) {
         for (let w = 0; w < 4; w++) {
           const key = `value${w + 1}`;
           const raw = rows.map(r => (r[key] ?? 0) * ch.scale);
+          // motecName may contain '{}' as a placeholder for FL/FR/RL/RR (e.g. 'Tyre Temp {} Inner');
+          // otherwise the corner is appended (e.g. 'Susp Pos' → 'Susp Pos FL').
+          const name = ch.motecName.includes('{}')
+            ? ch.motecName.replace('{}', WHEEL_SUFFIX[w])
+            : `${ch.motecName} ${WHEEL_SUFFIX[w]}`;
           channels.push({
-            name: `${ch.motecName} ${WHEEL_SUFFIX[w]}`,
+            name,
             shortName: `${ch.shortName}${WHEEL_SUFFIX[w]}`,
             unit: ch.unit,
             freq,

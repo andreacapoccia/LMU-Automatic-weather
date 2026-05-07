@@ -1107,12 +1107,6 @@ async function initTelemetry() {
         await window.go.setSetting('firstRunDismissed', true);
     });
 
-    // Empty state buttons
-    const emptyDrop = $('tlmEmptyDrop');
-    if (emptyDrop) emptyDrop.addEventListener('click', () => $('tlmDrop')?.click());
-    const emptySetup = $('tlmEmptySetup');
-    if (emptySetup) emptySetup.addEventListener('click', () => { if (window._openDrawer) window._openDrawer('auto'); });
-
     // Dropzone
     const dz = $('tlmDrop');
     if (dz) {
@@ -1179,9 +1173,8 @@ async function initTelemetry() {
                     logEl.textContent += `✓ ${msg.ld || ''}\n`;
                     if (msg.ld) addSession(msg.ld, 'ok');
                 } else if (msg.type === 'start') {
-                    const startFile = (msg.file || '').replace(/\\/g, '/').split('/').pop();
-                    logEl.textContent += `→ ${startFile}\n`;
-                    updateActiveConv(0, 'Reading DuckDB', startFile);
+                    logEl.textContent += `→ ${msg.file || ''}\n`;
+                    updateActiveConv(0, 'Reading DuckDB');
                     showActiveConv(true);
                 } else if (msg.type === 'progress') {
                     const step = msg.step;
@@ -1272,9 +1265,8 @@ async function runConversion(inputPath) {
                     inputPath.substring(0, inputPath.lastIndexOf('/'));
     }
 
-    const fname = inputPath.replace(/\\/g, '/').split('/').pop();
     showActiveConv(true);
-    updateActiveConv(0, 'Reading DuckDB', fname);
+    updateActiveConv(0, 'Reading DuckDB');
 
     try {
         const results = await window.go.convertRun(inputPath, outputDir);
@@ -1292,19 +1284,15 @@ async function runConversion(inputPath) {
 function showActiveConv(show) {
     const panel = $('activeConvPanel');
     if (panel) panel.style.display = show ? '' : 'none';
-    const idle = $('idleConv');
-    if (idle) idle.style.display = show ? 'none' : '';
 }
 
-function updateActiveConv(pct, stage, filename) {
+function updateActiveConv(pct, stage) {
     const fill = $('activeFill');
     const pctEl = $('activePct');
     const stageEl = $('activeStage');
-    const nameEl = $('activeConvName');
     if (fill) fill.style.width = pct + '%';
     if (pctEl) pctEl.textContent = pct + '%';
     if (stageEl) stageEl.textContent = stage;
-    if (nameEl && filename) nameEl.textContent = filename;
 }
 
 // ───────── Sessions list ─────────
@@ -1420,24 +1408,11 @@ async function handleSessionAction(action, session) {
 }
 
 function updateTlmSummary() {
-    const badge = $('tabBadgeTlm');
-    const count = tlmState.sessions.filter(s => s.status === 'ok').length;
-    if (badge) { badge.textContent = count; badge.style.display = count ? '' : 'none'; }
     const totalEl = $('tlmTotalSessions');
-    if (totalEl) totalEl.textContent = tlmState.sessions.filter(s => s.status === 'ok').length;
+    if (totalEl) totalEl.textContent = tlmState.sessions.length;
     const lapsEl = $('tlmTotalLaps');
     if (lapsEl) {
         const total = tlmState.sessions.reduce((acc, s) => acc + (s.laps || 0), 0);
         lapsEl.textContent = total || '—';
-    }
-    const fastestEl = $('tlmFastest');
-    if (fastestEl) {
-        const times = tlmState.sessions.map(s => s.fastest).filter(t => t && t !== '—');
-        fastestEl.textContent = times.length ? times[0] : '—';
-    }
-    const lastEl = $('tlmLast');
-    if (lastEl) {
-        const okSessions = tlmState.sessions.filter(s => s.status === 'ok');
-        lastEl.textContent = okSessions.length ? (okSessions[0].date || '—') : '—';
     }
 }

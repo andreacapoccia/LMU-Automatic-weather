@@ -1299,19 +1299,10 @@ async function runConversion(inputPath) {
                     inputPath.substring(0, inputPath.lastIndexOf('/'));
     }
 
-    showActiveConv(true);
-    updateActiveConv(0, 'Reading DuckDB');
-
     try {
-        const results = await window.go.convertRun(inputPath, outputDir);
-        showActiveConv(false);
-        const done = results.find((r) => r.type === 'done');
-        if (done && done.ld) {
-            addSession(done.ld, 'ok');
-        }
+        await window.go.convertRun(inputPath, outputDir);
     } catch (e) {
-        showActiveConv(false);
-        addSession(inputPath, 'err');
+        // onConvertLog handles all state mutations via 'error' event
     }
 }
 

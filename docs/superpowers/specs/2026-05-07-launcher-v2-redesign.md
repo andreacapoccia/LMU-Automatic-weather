@@ -14,10 +14,13 @@ The current app works end-to-end with the new converter; this redesign is purely
 
 ## Out of scope
 
-- React `Tweaks` panel (`tweaks-panel.jsx`) and `<script type="text/babel">` blocks at the bottom of the design — design-time controls only, removed.
-- Cosmetic mock features in the design that need new IPC/state to be meaningful: tab badge counts, active-conversion progress bar, first-run setup card, demo "Preview empty" toggle. Markup stays so styling is intact, but they remain static placeholders this round.
+- React `Tweaks` panel (`tweaks-panel.jsx`) and `<script type="text/babel">` blocks at the bottom of the design — design-time controls, removed.
+- The design's `demoEmptyToggle` (top-bar "Preview empty" button) — design-time preview only, no production purpose. **Remove from markup.**
+- The design's `summaryStats` block in the telemetry view — needs new IPC/state, not in current app. **Keep markup, leave content static** until follow-up work.
 - Any main-process changes. Preload API surface is frozen.
 - The DuckDB→MoTeC converter (separate work, already done).
+
+**Note on "cosmetic-looking" mocks that are actually live:** `tabBadgeTlm`, `activeFill`/`activePct`/`activeStage`/`activeConv`, `firstRunCard`/`firstRunCta`/`firstRunDismiss`, `practiceStatus`/`practiceReset` are all wired in current `app.js`. They look like prototype placeholders in the design but are real features and MUST be re-wired.
 
 ## Architecture
 
@@ -38,59 +41,67 @@ app/src/renderer/
 
 | Design references | Resolution |
 |---|---|
-| `assets/logo.png` | Use existing `app/assets/GO Setups logo.png`; update `src` |
-| `ref/icon.png` (weather pill brand mark) | Substitute with `assets/GO Setups logo.png` or remove the `<img>` if it doesn't render well at small size |
+| `assets/logo.png` (top-bar brand) | Update `src` to `assets/GO Setups logo.png` (existing) |
+| `ref/icon.png` (weather pill brand mark, 4 references) | **Remove the `<img class="wx-brand">` element entirely.** No appropriate small brand icon exists; the full GO Setups logo would render unreadably at that size. |
 
 No new asset files needed.
 
+## ID changes required in the design markup
+
+Two places where the design lacks IDs we need:
+
+1. The "Change" button inside `installPill`. Currently `<button type="button" class="install-pill-btn">Change</button>` — add `id="installPillChange"` so `pickInstallPath` can bind to it. (Pill itself stays click-inert.)
+2. None other identified during spec review; full ID diff is built during implementation as task output.
+
 ## ID compatibility
 
-Most element IDs already match between current and new design (`trackSelect`, `layoutSelect`, `classChips`, `launchBtn`, `settingsBtn`, `tlmDrop`, `watcherToggle`, `sessionsGrid`, etc.). Three categories during implementation:
+Most element IDs already match (`trackSelect`, `layoutSelect`, `classChips`, `launchBtn`, `settingsBtn`, `tlmDrop`, `watcherToggle`, `sessionsGrid`, `tabBadgeTlm`, `firstRunCard`, etc.). Three categories during implementation:
 
-1. **Both have it** — re-bind handler to new ID, no other change.
-2. **Current handler, no element in new design** — check if the new design has the same control under a different ID/structure (e.g. weather presets moved from cards to pills); if truly removed, drop the handler.
-3. **New element, no current handler** — leave static for now (the cosmetic mocks above).
-
-A full ID diff is built during implementation as task output, not pre-computed in this spec.
+1. **Both have it, same control type** — re-bind handler to new ID, no behavior change.
+2. **Both have it, different control type** (e.g. weather went from radio cards to pills with different click semantics) — re-bind AND adapt the handler logic to the new control's interaction model.
+3. **Current handler, no element in new design** — search the new design for an equivalent under a different ID; if there genuinely isn't one, remove the handler. Do not silently leave dead code.
 
 ## IPC integration map (current `window.go.*` → new view)
 
 | Method | Where in new design |
 |---|---|
-| `scanInstall`, `pickInstallPath`, `resetInstallPath` | `installPill` in topbar; settings drawer install section |
+| `scanInstall`, `pickInstallPath`, `resetInstallPath` | `installPill` shows path + state; new `#installPillChange` button triggers `pickInstallPath`; settings drawer install section for `resetInstallPath` |
 | `isLmuAlive`, `isGoFastAlive` | `lmuStatusPill` (`#lmuStatusPill`, `#lmuStatusText`) in topbar |
-| `fetchLiveTracks`, `fetchLiveCars` | Track/Car panels (`trackSelect`, `layoutSelect`, `classChips`, car selects) |
-| `launch(payload)` | `launchBtn`; status logged into `#log` panel |
+| `fetchLiveTracks`, `fetchLiveCars` | Track/Car panels (`trackSelect`, `layoutSelect`, `classChips`, car selects in `.panel-car .row`) |
+| `launch(payload)` | `launchBtn`; status streamed into `#log` |
 | `onLog` | `#log` div in launch panel |
-| `convertRun`, `startWatch`, `stopWatch`, `onConvertLog` | Telemetry view: `tlmDrop`, `tlmPickFile`, `watcherToggle`, sessions grid |
-| `pickFolder`, `pickFile` | Settings drawer (auto-watch path), telemetry view |
+| `convertRun`, `startWatch`, `stopWatch`, `onConvertLog` | Telemetry view: `tlmDrop`, `tlmPickFile`, `watcherToggle`, sessions grid; updates `tabBadgeTlm`, `activeConv*`, `firstRunCard` visibility |
+| `pickFolder`, `pickFile` | Settings drawer auto-watch path + telemetry-view file pickers |
 | `motecOpen`, `revealInFolder`, `deleteConversion` | Per-row actions in `sessionsGrid` |
-| `getSetting`, `setSetting` | Settings drawer fields |
-| `openExternal` | Footer/help links if present |
+| `getSetting`, `setSetting` | Settings drawer fields; `firstRunDismissed` flag for the first-run card |
 
-## Order of work (implementation will sequence as)
+`openExternal` is exposed by preload but unused in current `app.js`; not bound this round.
 
-1. Drop in new `index.html` + `styles.css` with corrected asset paths. App launches, mostly non-functional.
-2. Migrate UI-only scripts from new design (tab switching, settings drawer open/close/section nav, switch toggles, range fill helpers, demo-empty toggle).
-3. Wire **Launcher view** end-to-end: install detection → track/car/weather/session bindings → launch → log streaming.
-4. Wire **Telemetry view** end-to-end: file dropzone, watcher toggle (calling existing `startWatch`/`stopWatch`), sessions grid render from existing convert logs, per-row actions.
-5. Wire **Settings drawer** sections to `getSetting`/`setSetting` and the install-path methods.
-6. Smoke test: launch a session, drop a `.duckdb`, toggle the watcher, change a setting, restart app — all paths green.
+## Order of work
+
+Each numbered step is one commit. App should boot at every step.
+
+1. **Drop in markup + styles.** Replace `index.html` and `styles.css` with the design's content (asset paths fixed, `installPillChange` ID added, `wx-brand` images and `demoEmptyToggle` removed). App launches but ~95% non-functional. Existing `app.js` still loaded so DOM-ready handlers fire and either bind successfully (matching IDs) or no-op.
+2. **UI-only scripts from the design.** Add tab switching, settings drawer open/close/section nav, switch toggles, range-fill helpers, log toggle. No IPC, just visuals.
+3. **Wire Launcher view.** Install detection → track/car/weather/session bindings → launch button → log streaming. Verify: pressing Launch enters LMU garage with the configured session.
+4. **Wire Telemetry view.** Dropzone, file picker, watcher toggle, sessions grid render, per-row actions (open/reveal/delete), `firstRunCard` show/dismiss, `activeConv*` progress, `tabBadgeTlm` count. Verify: drop a `.duckdb`, get a `.ld`; toggle watcher; restart app and dismiss-state persists.
+5. **Wire Settings drawer.** All sections to `getSetting`/`setSetting` and the install-path methods. Verify: change a setting, restart app, value persists.
+6. **Smoke test + cleanup.** Walk every IPC method end-to-end. Remove any dead code from old `app.js`. Verify nothing in the browser console errors on app start.
 
 ## Verification
 
-This is UI work; success is functional, not test-suite-driven. Manual verification per step:
+UI work; success is functional, not test-suite-driven. Manual verification per step is listed above. Final criteria:
 
-- Launch view: press Launch, LMU enters garage with the configured session.
+- Launch view: press Launch → LMU enters garage with configured session.
 - Telemetry: dropping a `.duckdb` produces a working `.ld` (already known good from converter work).
-- Watcher: toggling on starts watching, file drops trigger conversion, conversion appears in grid.
+- Watcher: toggling on starts watching, file drops trigger conversion, conversion appears in grid, `tabBadgeTlm` increments, `firstRunCard` hides.
 - Settings: changes persist across app restart.
+- No console errors on startup or during any of the above flows.
 
 ## Files touched
 
 - `app/src/renderer/index.html` — rewritten
 - `app/src/renderer/styles.css` — rewritten
 - `app/src/renderer/app.js` — substantially modified (UI binding layer rewrite, IPC integration preserved)
-- `app/assets/` — possibly add a small `icon.png` if weather pill design needs one (or substitute existing logo)
 
-No changes to `app/src/main/`, no `package.json` dependencies, no preload changes.
+No changes to `app/src/main/`, no `package.json` dependencies, no preload changes, no new assets.

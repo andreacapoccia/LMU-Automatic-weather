@@ -567,69 +567,6 @@
   </div>
 </footer>
 
-<style>
-/* Tweak: density */
-body[data-density="compact"] .panel { padding: 14px 16px; }
-body[data-density="compact"] .layout { gap: 10px; padding: 14px; }
-body[data-density="compact"] .panel-title { font-size: 16px; }
-body[data-density="compact"] .session-groups { gap: 10px; }
-
-/* Tweak: weather treatment flat */
-body[data-weather="flat"] .weather-card .wc-bg,
-body[data-weather="flat"] .wx-pill .wc-bg { display: none; }
-body[data-weather="flat"] .weather-card.active,
-body[data-weather="flat"] .wx-pill.active {
-  background: var(--accent-soft);
-}
-
-/* Tweak: ambient glow */
-body[data-glow="off"] .ambient { opacity: 0.3; }
-body[data-glow="off"] .ambient::after { display: none; }
-
-/* Tweak: mono labels */
-body[data-mono="off"] .panel-eyebrow,
-body[data-mono="off"] .panel-aside,
-body[data-mono="off"] .field-label,
-body[data-mono="off"] .session-group-title,
-body[data-mono="off"] .summary-label,
-body[data-mono="off"] .footer-meta,
-body[data-mono="off"] .brand-tag,
-body[data-mono="off"] .status-pill,
-body[data-mono="off"] .track-stats,
-body[data-mono="off"] .track-meta,
-body[data-mono="off"] .wc-meta {
-  font-family: 'Inter Tight', sans-serif !important;
-  letter-spacing: 0.4px;
-}
-
-/* Tweak: launch drama */
-body[data-drama="subtle"] .launch-btn {
-  background: rgba(255,255,255,0.05);
-  color: var(--accent-2);
-  border: 1px solid var(--accent);
-  box-shadow: none;
-  padding: 14px 20px;
-  font-size: 13px;
-}
-body[data-drama="subtle"] .launch-btn::before { display: none; }
-body[data-drama="subtle"] .launch-btn .arrow { background: var(--accent-soft); }
-
-body[data-drama="hero"] .launch-btn {
-  padding: 26px 24px;
-  font-size: 17px;
-  letter-spacing: 3px;
-  border-radius: 14px;
-}
-body[data-drama="hero"] .launch-btn .arrow { width: 28px; height: 28px; }
-body[data-drama="hero"] .panel-launch::after {
-  content: 'HOLD TO LAUNCH'; position: absolute;
-  bottom: 8px; left: 50%; transform: translateX(-50%);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 9px; letter-spacing: 2px;
-  color: var(--text-faint); pointer-events: none;
-}
-</style>
-
 <!-- ═══════════════ SETTINGS DRAWER ═══════════════ -->
 <div class="drawer-backdrop" id="drawerBackdrop"></div>
 <aside class="drawer" id="settingsDrawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">

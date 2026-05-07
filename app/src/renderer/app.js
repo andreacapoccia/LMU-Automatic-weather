@@ -1224,9 +1224,7 @@ async function initTelemetry() {
     });
 
     // Convert log feed
-    const logEl = $('convertLog');
     window.go.onConvertLog((line) => {
-        // 1. UI-agnostic state updates (always run, even if convertLog element absent)
         try {
             const msg = JSON.parse(line);
             if (msg.type === 'done') {
@@ -1244,24 +1242,8 @@ async function initTelemetry() {
                 if (msg.file) addSession(msg.file, 'err');
                 showActiveConv(false);
             }
-
-            // 2. Optional logging UI
-            if (logEl) {
-                if (msg.type === 'done') {
-                    logEl.textContent += `✓ ${msg.ld || ''}\n`;
-                } else if (msg.type === 'start') {
-                    logEl.textContent += `→ ${msg.file || ''}\n`;
-                } else {
-                    logEl.textContent += JSON.stringify(msg) + '\n';
-                }
-                logEl.scrollTop = logEl.scrollHeight;
-            }
         } catch (_) {
-            // non-JSON line — log only if element present
-            if (logEl) {
-                logEl.textContent += line + '\n';
-                logEl.scrollTop = logEl.scrollHeight;
-            }
+            // non-JSON line — ignored
         }
     });
 

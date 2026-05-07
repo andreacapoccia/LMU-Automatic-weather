@@ -58,12 +58,12 @@ function logLine(line, kind = '') {
 function setStatus(alive) {
     const pill = $('lmuStatusPill');
     const text = $('lmuStatusText');
+    if (!pill) return;
     pill.classList.toggle('offline', !alive);
     if (text) text.textContent = alive ? 'LMU running · main menu' : 'LMU offline';
     const live = document.querySelector('.live');
     if (live) live.style.color = alive ? 'var(--green)' : 'var(--text-faint)';
 }
-
 
 function formatTime(minutes) {
     const m = ((minutes % 1440) + 1440) % 1440;

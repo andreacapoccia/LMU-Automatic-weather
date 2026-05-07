@@ -933,7 +933,7 @@ function switchView(name) {
 }
 
 // ───────── Settings drawer ─────────
-function initDrawer() {
+async function initDrawer() {
     const drawer = $('settingsDrawer');
     const backdrop = $('drawerBackdrop');
     const navBtns = document.querySelectorAll('#drawerNav button[data-sec]');
@@ -1061,9 +1061,14 @@ function initDrawer() {
         namingPreview.innerHTML = 'Preview · <b>' + (out || 'session') + '.ld</b>';
     }
     if (namingInput) {
+        let namingSaveTimer;
         namingInput.addEventListener('input', () => {
             updateNamingPreview();
-            window.go.setSetting('outputNamingTemplate', namingInput.value);
+            clearTimeout(namingSaveTimer);
+            namingSaveTimer = setTimeout(() => {
+                window.go.setSetting('outputNamingTemplate', namingInput.value)
+                    .catch(err => console.error('Failed to save naming template:', err));
+            }, 300);
             flashSaved();
         });
     }
@@ -1071,13 +1076,16 @@ function initDrawer() {
         chip.addEventListener('click', () => {
             if (!namingInput) return;
             const pos = namingInput.selectionStart != null ? namingInput.selectionStart : namingInput.value.length;
-            namingInput.value = namingInput.value.slice(0, pos) + chip.dataset.tok + namingInput.value.slice(pos);
+            namingInput.value = namingInput.value.slice(0, pos) + (chip.dataset.tok || '') + namingInput.value.slice(pos);
             updateNamingPreview();
-            window.go.setSetting('outputNamingTemplate', namingInput.value);
+            window.go.setSetting('outputNamingTemplate', namingInput.value)
+                .catch(err => console.error('Failed to save naming template:', err));
             flashSaved();
             namingInput.focus();
         });
     });
+    const savedTemplate = await window.go.getSetting('outputNamingTemplate');
+    if (savedTemplate && namingInput) namingInput.value = savedTemplate;
     updateNamingPreview();
 }
 
@@ -1102,7 +1110,6 @@ async function initTelemetry() {
     const outputDir = await window.go.getSetting('outputDir') || '';
     const motecExe = await window.go.getSetting('motecExe') || '';
     const watcherEnabled = await window.go.getSetting('watcherEnabled') || false;
-    const namingTemplate = await window.go.getSetting('outputNamingTemplate') || '';
 
     const setWatchPath = $('setWatchPath');
     if (setWatchPath) setWatchPath.value = watchDir;
@@ -1110,8 +1117,6 @@ async function initTelemetry() {
     if (setOutPath) setOutPath.value = outputDir;
     const setMotecExe = $('setMotecExe');
     if (setMotecExe) setMotecExe.value = motecExe;
-    const setNamingEl = $('setNaming');
-    if (setNamingEl && namingTemplate) setNamingEl.value = namingTemplate;
 
     // Output mode segmented control
     const outMode = $('setOutMode');

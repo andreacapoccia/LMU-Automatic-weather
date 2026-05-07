@@ -1184,6 +1184,12 @@ async function initTelemetry() {
         } else {
             await stopWatcher();
         }
+        await window.go.setSetting('watcherEnabled', tlmState.watcherRunning);
+        const enableSwitch = $('setAutoEnable');
+        if (enableSwitch) {
+            enableSwitch.classList.toggle('on', tlmState.watcherRunning);
+            enableSwitch.setAttribute('aria-checked', String(tlmState.watcherRunning));
+        }
     });
 
     $('wcConfigure').addEventListener('click', (e) => {
@@ -1253,6 +1259,7 @@ async function initTelemetry() {
     }
 
     renderSessionsGrid();
+    updateTlmSummary();
 }
 
 // ───────── Watcher helpers ─────────

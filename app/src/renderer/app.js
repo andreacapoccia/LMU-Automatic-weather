@@ -1149,6 +1149,24 @@ async function initTelemetry() {
         if (window._openDrawer) window._openDrawer('auto');
     });
 
+    // Empty-state CTAs
+    const emptyConfigure = $('emptyConfigure');
+    if (emptyConfigure) {
+        emptyConfigure.addEventListener('click', () => {
+            if (window._openDrawer) window._openDrawer('auto');
+        });
+    }
+    const emptyPickFile = $('emptyPickFile');
+    if (emptyPickFile) {
+        emptyPickFile.addEventListener('click', async () => {
+            const result = await window.go.pickFile({
+                title: 'Select DuckDB session file',
+                filters: [{ name: 'DuckDB files', extensions: ['duckdb'] }],
+            });
+            if (!result.canceled) runConversion(result.path);
+        });
+    }
+
     // Search + filter
     $('tlmSearch').addEventListener('input', (e) => {
         tlmState.searchQuery = e.target.value;
@@ -1282,7 +1300,7 @@ async function runConversion(inputPath) {
 }
 
 function showActiveConv(show) {
-    const panel = $('activeConvPanel');
+    const panel = $('activeConv');
     if (panel) panel.style.display = show ? '' : 'none';
 }
 
@@ -1338,7 +1356,7 @@ function renderSessionsGrid() {
     if (tlmState.filterStatus !== 'all') list = list.filter((s) => s.status === tlmState.filterStatus);
     if (q) list = list.filter((s) => (s.baseName + ' ' + s.track + ' ' + s.car).toLowerCase().includes(q));
 
-    const emptyEl = $('tlmEmpty');
+    const emptyEl = $('sessionsEmpty');
     if (list.length === 0) {
         if (emptyEl) emptyEl.style.display = '';
         return;
@@ -1408,11 +1426,10 @@ async function handleSessionAction(action, session) {
 }
 
 function updateTlmSummary() {
-    const totalEl = $('tlmTotalSessions');
-    if (totalEl) totalEl.textContent = tlmState.sessions.length;
-    const lapsEl = $('tlmTotalLaps');
-    if (lapsEl) {
-        const total = tlmState.sessions.reduce((acc, s) => acc + (s.laps || 0), 0);
-        lapsEl.textContent = total || '—';
+    const badge = $('tabBadgeTlm');
+    const count = tlmState.sessions.length;
+    if (badge) {
+        badge.textContent = count;
+        badge.style.display = count > 0 ? '' : 'none';
     }
 }

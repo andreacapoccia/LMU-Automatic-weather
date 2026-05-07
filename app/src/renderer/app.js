@@ -56,20 +56,14 @@ function logLine(line, kind = '') {
 }
 
 function setStatus(alive) {
-    const pill = $('lmuStatus');
-    const text = pill.querySelector('.status-text');
+    const pill = $('lmuStatusPill');
+    const text = $('lmuStatusText');
     pill.classList.toggle('offline', !alive);
-    text.textContent = alive ? 'LMU running · main menu' : 'LMU offline';
-    const live = $('footerLive');
+    if (text) text.textContent = alive ? 'LMU running · main menu' : 'LMU offline';
+    const live = document.querySelector('.live');
     if (live) live.style.color = alive ? 'var(--green)' : 'var(--text-faint)';
 }
 
-function setGoFastStatus(alive) {
-    const pill = $('goFastStatus');
-    const text = pill.querySelector('.status-text');
-    pill.classList.toggle('offline', !alive);
-    text.textContent = alive ? 'GO Fast running' : 'GO Fast offline';
-}
 
 function formatTime(minutes) {
     const m = ((minutes % 1440) + 1440) % 1440;
@@ -102,18 +96,18 @@ function applyScanResult(result) {
     state.liveTracksFetched = false;
 
     const trackSelect = $('trackSelect');
-    const installPath = $('installPath');
+    const installPathEl = document.querySelector('.install-pill-path');
 
     if (!result?.found) {
         trackSelect.innerHTML = '<option value="">Le Mans Ultimate not found</option>';
-        installPath.textContent = 'not detected';
+        if (installPathEl) installPathEl.textContent = 'not detected';
         $('installPill').title = 'Le Mans Ultimate install not found — click Change to set the path manually.';
         return;
     }
 
     populateTracks(result.tracks);
     const tag = result.source === 'manual' ? '(manual)' : '(auto)';
-    installPath.textContent = `${tag} ${result.installRoot.split(/[/\\]/).slice(-2).join('/')}`;
+    if (installPathEl) installPathEl.textContent = `${tag} ${result.installRoot.split(/[/\\]/).slice(-2).join('/')}`;
     $('installPill').title = result.installRoot;
 }
 
@@ -314,7 +308,6 @@ async function refreshLiveCars(force = false) {
     state.cars = cars;
     state.liveCarsFetched = true;
     populateClassChips();
-    $('carAside').textContent = `${cars.length} owned`;
 }
 
 function populateClassChips() {
@@ -595,12 +588,6 @@ async function pollStatus() {
         if (alive) refreshLiveTracks();
     } catch (_) {
         setStatus(false);
-    }
-    try {
-        const alive = await window.go.isGoFastAlive();
-        setGoFastStatus(alive);
-    } catch (_) {
-        setGoFastStatus(false);
     }
 }
 
@@ -893,7 +880,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('focus', () => refreshLiveCars(true));
 
     // Install pill
-    $('changeInstallPath').addEventListener('click', pickInstallPath);
+    $('installPillChange').addEventListener('click', pickInstallPath);
 
     // Launch + log toggle
     $('launchBtn').addEventListener('click', onLaunch);
@@ -1120,6 +1107,12 @@ async function initTelemetry() {
         await window.go.setSetting('firstRunDismissed', true);
     });
 
+    // Empty state buttons
+    const emptyDrop = $('tlmEmptyDrop');
+    if (emptyDrop) emptyDrop.addEventListener('click', () => $('tlmDrop')?.click());
+    const emptySetup = $('tlmEmptySetup');
+    if (emptySetup) emptySetup.addEventListener('click', () => { if (window._openDrawer) window._openDrawer('auto'); });
+
     // Dropzone
     const dz = $('tlmDrop');
     if (dz) {
@@ -1139,7 +1132,7 @@ async function initTelemetry() {
         }));
     }
 
-    $('tlmChooseFile').addEventListener('click', async () => {
+    $('tlmPickFile').addEventListener('click', async () => {
         const result = await window.go.pickFile({
             title: 'Select DuckDB session file',
             filters: [{ name: 'DuckDB files', extensions: ['duckdb'] }],
@@ -1186,8 +1179,9 @@ async function initTelemetry() {
                     logEl.textContent += `✓ ${msg.ld || ''}\n`;
                     if (msg.ld) addSession(msg.ld, 'ok');
                 } else if (msg.type === 'start') {
-                    logEl.textContent += `→ ${msg.file || ''}\n`;
-                    updateActiveConv(0, 'Reading DuckDB');
+                    const startFile = (msg.file || '').replace(/\\/g, '/').split('/').pop();
+                    logEl.textContent += `→ ${startFile}\n`;
+                    updateActiveConv(0, 'Reading DuckDB', startFile);
                     showActiveConv(true);
                 } else if (msg.type === 'progress') {
                     const step = msg.step;
@@ -1258,7 +1252,7 @@ function updateWatcherPill(on, watchDir) {
 
 function updateWatcherCard() {
     window.go.getSetting('watchDir').then((watchDir) => {
-        const pathEl = $('wcPath');
+        const pathEl = $('watcherPath');
         if (pathEl) pathEl.textContent = watchDir || 'No folder configured';
     });
 }
@@ -1278,8 +1272,9 @@ async function runConversion(inputPath) {
                     inputPath.substring(0, inputPath.lastIndexOf('/'));
     }
 
+    const fname = inputPath.replace(/\\/g, '/').split('/').pop();
     showActiveConv(true);
-    updateActiveConv(0, 'Reading DuckDB');
+    updateActiveConv(0, 'Reading DuckDB', fname);
 
     try {
         const results = await window.go.convertRun(inputPath, outputDir);
@@ -1297,15 +1292,19 @@ async function runConversion(inputPath) {
 function showActiveConv(show) {
     const panel = $('activeConvPanel');
     if (panel) panel.style.display = show ? '' : 'none';
+    const idle = $('idleConv');
+    if (idle) idle.style.display = show ? 'none' : '';
 }
 
-function updateActiveConv(pct, stage) {
+function updateActiveConv(pct, stage, filename) {
     const fill = $('activeFill');
     const pctEl = $('activePct');
     const stageEl = $('activeStage');
+    const nameEl = $('activeConvName');
     if (fill) fill.style.width = pct + '%';
     if (pctEl) pctEl.textContent = pct + '%';
     if (stageEl) stageEl.textContent = stage;
+    if (nameEl && filename) nameEl.textContent = filename;
 }
 
 // ───────── Sessions list ─────────
@@ -1421,11 +1420,24 @@ async function handleSessionAction(action, session) {
 }
 
 function updateTlmSummary() {
+    const badge = $('tabBadgeTlm');
+    const count = tlmState.sessions.filter(s => s.status === 'ok').length;
+    if (badge) { badge.textContent = count; badge.style.display = count ? '' : 'none'; }
     const totalEl = $('tlmTotalSessions');
-    if (totalEl) totalEl.textContent = tlmState.sessions.length;
+    if (totalEl) totalEl.textContent = tlmState.sessions.filter(s => s.status === 'ok').length;
     const lapsEl = $('tlmTotalLaps');
     if (lapsEl) {
         const total = tlmState.sessions.reduce((acc, s) => acc + (s.laps || 0), 0);
         lapsEl.textContent = total || '—';
+    }
+    const fastestEl = $('tlmFastest');
+    if (fastestEl) {
+        const times = tlmState.sessions.map(s => s.fastest).filter(t => t && t !== '—');
+        fastestEl.textContent = times.length ? times[0] : '—';
+    }
+    const lastEl = $('tlmLast');
+    if (lastEl) {
+        const okSessions = tlmState.sessions.filter(s => s.status === 'ok');
+        lastEl.textContent = okSessions.length ? (okSessions[0].date || '—') : '—';
     }
 }

@@ -109,26 +109,26 @@
     </div>
 
     <div class="row">
-      <select class="select" style="flex: 1.1">
+      <select id="carModelSelect" class="select" style="flex: 1.1">
         <option>Alpine A424</option>
         <option>Ferrari 499P</option>
         <option>Toyota GR010</option>
         <option>Porsche 963</option>
         <option>BMW M Hybrid V8</option>
       </select>
-      <select class="select" style="flex: 1.4">
+      <select id="carLiverySelect" class="select" style="flex: 1.4">
         <option>Alpine Endurance Team #36 — LM</option>
         <option>Alpine Endurance Team #35</option>
       </select>
     </div>
 
     <div class="auto-detect-row">
-      <button class="ghost-btn" type="button">Auto-detect</button>
-      <button class="ghost-btn" type="button" title="Refresh">
+      <button id="autoDetectCar" class="ghost-btn" type="button">Auto-detect</button>
+      <button id="refreshCars" class="ghost-btn" type="button" title="Refresh">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
         Refresh
       </button>
-      <span class="muted small auto-hint">Inherits LMU.</span>
+      <span id="autoDetectLabel" class="muted small auto-hint">Inherits LMU.</span>
     </div>
   </section>
 
@@ -151,7 +151,7 @@
         <span class="wx-pill-name">Dry</span>
       </button>
 
-      <button class="wx-pill" data-preset="rain" data-wx="rain" title="GO Setups Rain — Overcast, 75% rain, 20°C" aria-label="GO Setups Rain">
+      <button class="wx-pill" data-preset="overcast_rain" data-wx="rain" title="GO Setups Rain — Overcast, 75% rain, 20°C" aria-label="GO Setups Rain">
         <span class="wc-bg"></span>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7FAEEF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <path d="M16 14a4 4 0 0 0-8-1A3.5 3.5 0 0 0 6.5 20H17a3 3 0 0 0 0-6h-1z" fill="rgba(127,174,239,0.15)"/>

@@ -36,7 +36,7 @@ Current behavior: `firstRunCard` visibility is computed once in `initTelemetry()
 
 The "Choose .w2k…" button in Settings → MoTeC is currently a bare `<button class="s-btn">` with no ID, no handler. The driver wants it to actually pick a workspace and have MoTeC open that workspace alongside the `.ld`.
 
-- **HTML:** Add `id="browseMotecWorkspace"` to the button. Add a sibling `<span class="s-path">` (or `<input class="s-input" readonly id="setMotecWorkspace">`) showing the picked path.
+- **HTML:** Reshape the row to an `.s-path-row` (matches existing pattern for the watch path / output path rows): a readonly `<input class="s-input mono" readonly id="setMotecWorkspace">` showing the picked path, then `<button class="s-btn" id="browseMotecWorkspace">Choose .w2k…</button>`.
 - **app.js:** In `initDrawer`, bind the button to:
   ```js
   const result = await window.go.pickFile({ filters: [{ name: 'MoTeC workspace', extensions: ['w2k'] }] });
@@ -53,19 +53,17 @@ The "Choose .w2k…" button in Settings → MoTeC is currently a bare `<button c
 
 ### 4. Channel mapping row — remove
 
-Inert UI with no real behavior. Remove the entire `.setting-row` containing "Channel mapping" from the Settings → MoTeC section in `index.html`. No CSS or JS changes; the row's elements have no IDs in the current code.
+Inert UI with no real behavior. Remove the entire `.setting-row` containing the "Channel mapping" label and its `<button class="s-btn">View defaults</button>` from the Settings → MoTeC section in `index.html`. No CSS or JS changes — verified via `grep -nE "View defaults|channelMapping|channel-mapping|channelMap" app.js` returning zero hits.
 
 ### 5. Time scale wording
 
-Slider currently outputs `Normal` for value 0, `×N` for N>0. LMU's actual options are `None / Normal / ×2`. The slider has only 3 useful positions — switch from a continuous range to a 3-step segmented control or keep the slider with 3 stops (0/1/2). Either way the labels become:
+Current state: slider is `min="0" max="60" step="1"` (so user can pick up to 60×) and `formatTimeScale` returns `'Normal'` for 0, `'×N'` otherwise. LMU's actual options are only `None / Normal / ×2`. We've been letting the user select invalid values; LMU presumably clamps silently.
 
-- 0 → `None`
-- 1 → `Normal`
-- 2 → `×2`
-
-- **HTML:** `#timeScale` slider stays `min=0 max=2 step=1`.
-- **app.js:** Update `bind('timeScale', 'timeScaleVal', …)` formatter to return `'None' / 'Normal' / '×2'`.
-- **Launch payload mapping:** Verify `state.overrides.timeScale` value is sent through correctly (LMU expects 0/1/2). Adjust if a different mapping is needed.
+- **HTML:** Change `#timeScale` slider to `min="0" max="2" step="1" value="1"`.
+- **app.js:** Update `formatTimeScale` to return `'None'` for 0, `'Normal'` for 1, `'×2'` for 2.
+- **app.js state:** Change `GO_SETUPS_DEFAULTS.timeScale` from `0` to `1` (Normal under the new mapping).
+- **Migration:** No special migration. Users with stored `timeScale=0` will now see "None" (which IS what 0 meant — no time progression). Acceptable.
+- **Launch payload:** No mapping change needed — we already send the integer; LMU's enum is `0=None, 1=Normal, 2=×2`. If a driver test reveals LMU uses different integers, fix here.
 
 ### 6. Remove Wind from weather UI
 
@@ -85,22 +83,28 @@ Same logic as wind — LMU does not simulate humidity.
 
 ### 8. Sky enum — full LMU set
 
-Current `#cwSky` has 4 options. LMU supports 11. Replace:
+Current `#cwSky` has 4 options with NO `value` attributes. The handler at `app.js:795` does `state.overrides.customWeather.sky = Number(e.target.value)` — `e.target.value` returns the option's display text (e.g. `"Clear"`), and `Number("Clear")` is `NaN`. **The sky setting has been silently broken since launch.**
 
-- clear
-- light clouds
-- partially cloudy
-- mostly cloudy
-- overcast
-- cloudy & drizzle
-- cloudy & light rain
-- overcast & light rain
-- overcast & rain
-- overcast & heavy rain
-- overcast & storm
+LMU supports 11 sky values. Replace and add explicit integer values:
 
-- **HTML:** Replace the `<option>`s in `#cwSky` with the 11 above (display capitalized: "Clear", "Light clouds", etc.).
-- **app.js:** Update the sky-name → integer mapper used when composing the launch payload. Find it via `grep -nE "cwSky|sky.*payload|customWeather\\.sky" app.js`. Map name → LMU enum index (verify exact integer values during driver test; if wrong, fix mapping with no schema change).
+```html
+<select id="cwSky" class="select">
+  <option value="0">Clear</option>
+  <option value="1">Light clouds</option>
+  <option value="2">Partially cloudy</option>
+  <option value="3">Mostly cloudy</option>
+  <option value="4">Overcast</option>
+  <option value="5">Cloudy &amp; drizzle</option>
+  <option value="6">Cloudy &amp; light rain</option>
+  <option value="7">Overcast &amp; light rain</option>
+  <option value="8">Overcast &amp; rain</option>
+  <option value="9">Overcast &amp; heavy rain</option>
+  <option value="10">Overcast &amp; storm</option>
+</select>
+```
+
+- **app.js:** No handler change needed — `Number(e.target.value)` will now produce the correct integer 0–10.
+- **Verify** the LMU enum order matches the displayed list during driver test. If LMU uses a different mapping (e.g. clear=0, storm=1, ...) update only the `value` attributes; the user-visible labels stay correct.
 
 ### 9. Watch-folder toggle clarity
 
@@ -150,7 +154,12 @@ Currently `tlmState.sessions` is in-memory only.
   const stored = await window.go.getSetting('convertedSessions');
   if (Array.isArray(stored)) tlmState.sessions = stored;
   ```
-- **Persistence cap:** 200 entries. Older entries silently dropped on save. Sessions that no longer exist on disk (file deleted manually) still show in the grid; clicking Open/Reveal on those will surface the error via existing IPC error paths. Pruning stale entries on boot is out of scope.
+- **Persistence cap:** 200 entries. New sessions are `unshift`ed to position 0 (so position 0 is newest); `slice(0, 200)` keeps the newest 200 and drops older. Sessions that no longer exist on disk (file deleted manually) still show in the grid; clicking Open/Reveal on those will surface the error via existing IPC error paths. Pruning stale entries on boot is out of scope.
+
+### 12. Version bump
+
+- `app/package.json`: `3.0.0` → `3.0.1`
+- `app/src/renderer/index.html`: brand tag `v3.0.0` → `v3.0.1` (2 occurrences)
 
 ## Files touched
 
@@ -160,10 +169,10 @@ Currently `tlmState.sessions` is in-memory only.
 | `app/src/main/lmu-launcher.js` | 10 |
 | `app/src/main/main.js` | 3 (motec:open update), 10 (new IPC) |
 | `app/src/main/preload.js` | 10 (expose getLmuNavState) |
-| `app/src/renderer/index.html` | 3, 4, 6, 7, 8, 9 |
+| `app/src/renderer/index.html` | 3, 4, 5 (slider attrs), 6, 7, 8, 9, 12 |
 | `app/src/renderer/styles.css` | 9 |
-| `app/src/renderer/app.js` | 2, 3 (binding), 5, 6, 8, 9 (binding), 10 (display), 11 |
-| `app/package.json` | version bump 3.0.0 → 3.0.1 |
+| `app/src/renderer/app.js` | 2, 3 (binding), 5 (formatter + state default), 6, 9 (binding), 10 (display), 11 |
+| `app/package.json` | 12 (version bump) |
 
 ## Verification
 
@@ -179,6 +188,7 @@ Manual smoke test on the packaged build:
 8. Watcher card has a clearly-visible on/off switch on the right; clicking it (or anywhere on the card except Configure) toggles the watcher.
 9. Launch a session in LMU; topbar pill text changes from "main menu" to a session-state label within ~5s. Exit to menu; returns to "main menu".
 10. Drop a `.duckdb`, wait for conversion, close the app, reopen → the session row is still in the grid.
+11. Footer / brand tag shows `v3.0.1`.
 
 No automated tests — renderer is vanilla JS with no test harness.
 

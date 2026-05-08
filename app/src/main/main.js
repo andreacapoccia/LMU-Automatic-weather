@@ -139,8 +139,11 @@ ipcMain.handle('gofast:isAlive', () => {
 });
 
 ipcMain.handle('convert:run', (_e, { inputPath, outputDir }) => {
+    const namingTemplate = settings.get('outputNamingTemplate', '');
     return new Promise((resolve, reject) => {
-        const child = spawn('node', [path.join(CONVERTER_DIR, 'convert.js'), inputPath, outputDir]);
+        const args = [path.join(CONVERTER_DIR, 'convert.js'), inputPath, outputDir];
+        if (namingTemplate) args.push(namingTemplate);
+        const child = spawn('node', args);
         const results = [];
         const stderrLines = [];
         child.stdout.on('data', chunk => {
@@ -164,7 +167,10 @@ ipcMain.handle('convert:run', (_e, { inputPath, outputDir }) => {
 
 ipcMain.handle('convert:startWatch', (_e, { watchDir, outputDir }) => {
     if (watcherProcess) return { ok: false, reason: 'already running' };
-    watcherProcess = spawn('node', [path.join(CONVERTER_DIR, 'watcher.js'), watchDir, outputDir]);
+    const namingTemplate = settings.get('outputNamingTemplate', '');
+    const args = [path.join(CONVERTER_DIR, 'watcher.js'), watchDir, outputDir];
+    if (namingTemplate) args.push(namingTemplate);
+    watcherProcess = spawn('node', args);
     watcherProcess.stdout.on('data', chunk => {
         for (const line of chunk.toString().split('\n').filter(Boolean))
             try { if (mainWindow) mainWindow.webContents.send('convert:log', line); } catch (_) {}

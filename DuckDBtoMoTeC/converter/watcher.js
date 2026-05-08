@@ -3,9 +3,9 @@ const chokidar = require('chokidar');
 const path = require('path');
 const { convert } = require('./convert');
 
-const [,, watchDir, outputDir] = process.argv;
+const [,, watchDir, outputDir, namingTemplate] = process.argv;
 if (!watchDir || !outputDir) {
-  process.stderr.write('Usage: node watcher.js <watchDir> <outputDir>\n');
+  process.stderr.write('Usage: node watcher.js <watchDir> <outputDir> [namingTemplate]\n');
   process.exit(1);
 }
 
@@ -37,7 +37,7 @@ function onFile(filePath) {
 function triggerConvert(filePath) {
   process.stdout.write(JSON.stringify({ type: 'detected', file: filePath }) + '\n');
   const outDir = outputDir || path.dirname(filePath);
-  convert(filePath, outDir).catch(err =>
+  convert(filePath, outDir, namingTemplate).catch(err =>
     process.stdout.write(JSON.stringify({ type: 'error', file: filePath, message: err.message }) + '\n')
   );
 }

@@ -1025,11 +1025,15 @@ async function initDrawer() {
     const detectBtn = $('detectWatchPath');
     if (detectBtn) {
         detectBtn.addEventListener('click', async () => {
-            const defaultPath = await window.go.getDefaultWatchPath();
-            $('setWatchPath').value = defaultPath;
-            await window.go.setSetting('watchDir', defaultPath);
-            flashSaved();
-            await refreshFirstRunCard();
+            try {
+                const defaultPath = await window.go.getDefaultWatchPath();
+                $('setWatchPath').value = defaultPath;
+                await window.go.setSetting('watchDir', defaultPath);
+                flashSaved();
+                await refreshFirstRunCard();
+            } catch (err) {
+                console.error('Failed to detect watch path:', err);
+            }
         });
     }
 

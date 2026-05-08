@@ -1029,7 +1029,7 @@ async function initDrawer() {
             $('setWatchPath').value = defaultPath;
             await window.go.setSetting('watchDir', defaultPath);
             flashSaved();
-            refreshFirstRunCard();
+            await refreshFirstRunCard();
         });
     }
 

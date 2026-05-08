@@ -1899,9 +1899,9 @@ input[type='range']::-webkit-slider-thumb:hover { transform: scale(1.1); }
 
 /* Empty state */
 .tlm-empty {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 14px;
-  padding: 64px 28px 72px;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  gap: 8px;
+  padding: 16px 28px 20px;
   text-align: center;
   position: relative;
 }
@@ -1914,9 +1914,9 @@ input[type='range']::-webkit-slider-thumb:hover { transform: scale(1.1); }
 }
 .tlm-empty > * { position: relative; z-index: 1; }
 .tlm-empty-glyph {
-  width: 88px; height: 88px;
+  width: 52px; height: 52px;
   display: grid; place-items: center;
-  border-radius: 22px;
+  border-radius: 14px;
   background:
     radial-gradient(circle at 30% 20%, rgba(255,59,31,0.22), transparent 65%),
     linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
@@ -1945,25 +1945,25 @@ input[type='range']::-webkit-slider-thumb:hover { transform: scale(1.1); }
 }
 .tlm-empty-title {
   font-family: 'Geist', sans-serif;
-  font-size: 22px; font-weight: 600; color: var(--text);
+  font-size: 16px; font-weight: 600; color: var(--text);
   letter-spacing: -0.02em;
   margin: 0;
 }
 .tlm-empty-sub {
-  font-size: 13px; color: var(--text-dim); max-width: 420px; line-height: 1.55;
+  font-size: 12px; color: var(--text-dim); max-width: 480px; line-height: 1.45;
   margin: 0;
 }
 .tlm-empty-steps {
   display: flex; gap: 0;
-  margin-top: 10px;
+  margin-top: 4px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: rgba(0,0,0,0.18);
   overflow: hidden;
 }
 .tlm-empty-step {
-  display: flex; align-items: center; gap: 10px;
-  padding: 11px 16px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
   border-right: 1px solid var(--line);
   min-width: 0;
 }
@@ -1984,10 +1984,10 @@ input[type='range']::-webkit-slider-thumb:hover { transform: scale(1.1); }
   white-space: nowrap;
 }
 .tlm-empty-actions {
-  display: flex; gap: 10px; margin-top: 8px;
+  display: flex; gap: 10px; margin-top: 4px;
 }
 .tlm-empty-cta {
-  padding: 11px 20px;
+  padding: 8px 18px;
   background: linear-gradient(180deg, #ff6a4f, #ff3b1f);
   color: #fff;
   border: none;

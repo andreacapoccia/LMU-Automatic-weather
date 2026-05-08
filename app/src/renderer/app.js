@@ -1441,7 +1441,11 @@ function updateActiveConv(pct, stage) {
 async function persistSessions() {
     // Cap at 200 to bound settings file growth. New sessions unshift to
     // position 0, so slice(0, 200) keeps the newest 200.
-    await window.go.setSetting('convertedSessions', tlmState.sessions.slice(0, 200));
+    // Callers fire-and-forget — swallow IPC failures so the unhandled
+    // rejection doesn't pollute the renderer console.
+    try {
+        await window.go.setSetting('convertedSessions', tlmState.sessions.slice(0, 200));
+    } catch {}
 }
 
 function addSession(ldPath, status) {

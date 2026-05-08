@@ -1344,6 +1344,11 @@ function updateWatcherToggle(on) {
     btn.setAttribute('aria-pressed', String(on));
     const txt = $('watcherStateText');
     if (txt) txt.textContent = on ? 'WATCHING' : 'OFF';
+    const sw = $('watcherSwitch');
+    if (sw) {
+        sw.classList.toggle('on', on);
+        sw.setAttribute('aria-checked', String(on));
+    }
 }
 
 function updateWatcherPill(on, watchDir) {

@@ -135,7 +135,7 @@ body { display: flex; flex-direction: column; }
     'session session weather'
     'session session launch';
   gap: 14px;
-  align-content: start;
+  align-content: center; /* vertically center the launcher panels — empty space splits top/bottom */
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;

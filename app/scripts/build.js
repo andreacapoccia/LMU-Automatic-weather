@@ -42,6 +42,19 @@ async function main() {
     copyDirSync(path.join(ROOT, 'src'), path.join(STAGE, 'src'));
     copyDirSync(path.join(ROOT, 'assets'), path.join(STAGE, 'assets'));
 
+    // Stage the DuckDB→MoTeC converter as an extra resource.
+    // Main process spawns Node scripts from this directory at runtime, so it
+    // must ship as plain files (not packed in app.asar). Includes node_modules
+    // so chokidar/duckdb (the latter has a native binary) work without the
+    // user having Node.js installed.
+    const CONVERTER_SRC = path.resolve(ROOT, '..', 'DuckDBtoMoTeC', 'converter');
+    const CONVERTER_STAGE = path.join(DIST, 'converter');  // basename = "converter" → lands at resources/converter/
+    if (!fs.existsSync(CONVERTER_SRC)) {
+        throw new Error('Converter not found at ' + CONVERTER_SRC);
+    }
+    console.log('Staging converter (with node_modules)…');
+    copyDirSync(CONVERTER_SRC, CONVERTER_STAGE);
+
     console.log('Packaging Electron app…');
     const appPaths = await packager({
         dir: STAGE,
@@ -54,6 +67,9 @@ async function main() {
         icon: path.join(ROOT, 'assets', 'icon.ico'),
         appCopyright: PKG.build.copyright,
         appVersion: PKG.version,
+        // Lands at <packaged>/resources/converter/ — main.js reads CONVERTER_DIR
+        // from process.resourcesPath when app.isPackaged.
+        extraResource: [CONVERTER_STAGE],
         win32metadata: {
             CompanyName: 'GO Setups',
             FileDescription: APP_NAME,
@@ -61,6 +77,9 @@ async function main() {
             OriginalFilename: `${APP_NAME}.exe`,
         },
     });
+
+    // Clean up the staged converter copy (the packager already grabbed it).
+    fs.rmSync(CONVERTER_STAGE, { recursive: true, force: true });
 
     fs.rmSync(STAGE, { recursive: true, force: true });
 

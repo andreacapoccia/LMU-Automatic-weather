@@ -9,7 +9,16 @@ const settings = require('./settings');
 
 let mainWindow = null;
 
-const CONVERTER_DIR = path.join(__dirname, '../../../DuckDBtoMoTeC/converter');
+// In dev, the converter lives a few levels up alongside the app.
+// In a packaged build it's copied into resources/converter/ via extraResource (see build.js).
+const CONVERTER_DIR = app.isPackaged
+    ? path.join(process.resourcesPath, 'converter')
+    : path.join(__dirname, '../../../DuckDBtoMoTeC/converter');
+
+// The packaged app doesn't ship Node.js. Use Electron's binary in node-mode
+// via the ELECTRON_RUN_AS_NODE env var so spawn() works without a system Node install.
+const NODE_BIN = process.execPath;
+const NODE_ENV = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
 let watcherProcess = null;
 
 function createWindow() {
@@ -144,7 +153,7 @@ ipcMain.handle('convert:run', (_e, { inputPath, outputDir }) => {
     return new Promise((resolve, reject) => {
         const args = [path.join(CONVERTER_DIR, 'convert.js'), inputPath, outputDir];
         if (namingTemplate) args.push(namingTemplate);
-        const child = spawn('node', args);
+        const child = spawn(NODE_BIN, args, { env: NODE_ENV });
         const results = [];
         const stderrLines = [];
         child.stdout.on('data', chunk => {
@@ -174,7 +183,7 @@ function spawnWatcher(watchDir, outputDir) {
     const namingTemplate = settings.get('outputNamingTemplate', '');
     const args = [path.join(CONVERTER_DIR, 'watcher.js'), watchDir, outputDir];
     if (namingTemplate) args.push(namingTemplate);
-    const proc = spawn('node', args);
+    const proc = spawn(NODE_BIN, args, { env: NODE_ENV });
     proc.stdout.on('data', chunk => {
         for (const line of chunk.toString().split('\n').filter(Boolean))
             try { if (mainWindow) mainWindow.webContents.send('convert:log', line); } catch (_) {}

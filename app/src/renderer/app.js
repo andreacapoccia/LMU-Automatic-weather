@@ -1,6 +1,6 @@
 // ───────── State ─────────
 const GO_SETUPS_DEFAULTS = {
-    timeScale: 0,           // Normal (real time)
+    timeScale: 1,           // Normal (real time) — LMU enum: 0=None, 1=Normal, 2=×2
     flagRules: 3,           // Full w/o DQ
     trackLimitsRules: 1,    // Default
     trackLimitsPoints: 5,
@@ -73,7 +73,10 @@ function formatTime(minutes) {
 }
 
 function formatTimeScale(v) {
-    return Number(v) === 0 ? 'Normal' : `×${v}`;
+    const n = Number(v);
+    if (n === 0) return 'None';
+    if (n === 1) return 'Normal';
+    return `×${n}`;
 }
 
 // Make range sliders show a coloured fill up to the thumb.
@@ -788,9 +791,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Custom weather sliders
     bindCustomRange('cwTemp', 'temperature', (v) => `${v}°C`);
     bindCustomRange('cwRain', 'rainChance', (v) => `${v}%`);
-    bindCustomRange('cwHum', 'humidity', (v) => `${v}%`);
-    bindCustomRange('cwWind', 'windSpeed', (v) => `${v} km/h`);
-    bindCustomRange('cwWindDir', 'windDirection', (v) => `${v}°`);
     const cwSkyEl = $('cwSky');
     if (cwSkyEl) cwSkyEl.addEventListener('change', (e) => {
         state.overrides.customWeather.sky = Number(e.target.value);

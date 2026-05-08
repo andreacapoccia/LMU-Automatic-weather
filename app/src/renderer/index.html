@@ -188,8 +188,6 @@
       <div class="wx-stat"><span class="wx-stat-k">Air temp</span><span class="wx-stat-v">20 °C</span></div>
       <div class="wx-stat"><span class="wx-stat-k">Track</span><span class="wx-stat-v">Saturated</span></div>
       <div class="wx-stat"><span class="wx-stat-k">Rain chance</span><span class="wx-stat-v">0%</span></div>
-      <div class="wx-stat"><span class="wx-stat-k">Wind</span><span class="wx-stat-v">2 km/h</span></div>
-      <div class="wx-stat"><span class="wx-stat-k">Humidity</span><span class="wx-stat-v">55%</span></div>
     </div>
 
     <!-- WET details (readonly) -->
@@ -205,8 +203,6 @@
       <div class="wx-stat"><span class="wx-stat-k">Air temp</span><span class="wx-stat-v">20 °C</span></div>
       <div class="wx-stat"><span class="wx-stat-k">Track</span><span class="wx-stat-v">Heavy wet</span></div>
       <div class="wx-stat"><span class="wx-stat-k">Rain chance</span><span class="wx-stat-v">75%</span></div>
-      <div class="wx-stat"><span class="wx-stat-k">Wind</span><span class="wx-stat-v">8 km/h</span></div>
-      <div class="wx-stat"><span class="wx-stat-k">Humidity</span><span class="wx-stat-v">92%</span></div>
     </div>
 
     <div id="customWeather" class="custom-weather hidden">
@@ -220,16 +216,22 @@
       <label class="field">
         <span class="field-label">Sky</span>
         <select id="cwSky" class="select">
-          <option>Clear</option><option>Partially cloudy</option><option>Overcast</option><option>Overcast &amp; rain</option>
+          <option value="0">Clear</option>
+          <option value="1">Light clouds</option>
+          <option value="2">Partially cloudy</option>
+          <option value="3">Mostly cloudy</option>
+          <option value="4">Overcast</option>
+          <option value="5">Cloudy &amp; drizzle</option>
+          <option value="6">Cloudy &amp; light rain</option>
+          <option value="7">Overcast &amp; light rain</option>
+          <option value="8">Overcast &amp; rain</option>
+          <option value="9">Overcast &amp; heavy rain</option>
+          <option value="10">Overcast &amp; storm</option>
         </select>
       </label>
       <label class="field">
         <span class="field-label">Rain chance <em id="cwRainVal">0%</em></span>
         <input id="cwRain" type="range" min="0" max="100" step="5" value="0" />
-      </label>
-      <label class="field">
-        <span class="field-label">Wind <em id="cwWindVal">0 km/h</em></span>
-        <input id="cwWind" type="range" min="0" max="50" step="1" value="0" />
       </label>
     </div>
   </section>
@@ -265,7 +267,7 @@
         </label>
         <label class="field">
           <span class="field-label">Time scale <em id="timeScaleVal">Normal</em></span>
-          <input id="timeScale" type="range" min="0" max="60" step="1" value="0" />
+          <input id="timeScale" type="range" min="0" max="2" step="1" value="1" />
         </label>
       </div>
 

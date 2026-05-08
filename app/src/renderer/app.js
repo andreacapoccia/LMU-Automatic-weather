@@ -601,7 +601,13 @@ async function onLaunch() {
 
 // ───────── Status polling ─────────
 async function pollStatus() {
-    try { setStatus(await window.go.getLmuNavState()); } catch { setStatus({ alive: false }); }
+    try {
+        const state = await window.go.getLmuNavState();
+        setStatus(state);
+        if (state?.alive) refreshLiveTracks();
+    } catch {
+        setStatus({ alive: false });
+    }
 }
 
 // ───────── Custom dropdown enhancer ─────────

@@ -1064,14 +1064,18 @@ async function initDrawer() {
     const browseWs = $('browseMotecWorkspace');
     if (browseWs) {
         browseWs.addEventListener('click', async () => {
-            const result = await window.go.pickFile({
-                title: 'Select MoTeC workspace (.w2k)',
-                filters: [{ name: 'MoTeC workspace', extensions: ['w2k'] }],
-            });
-            if (result.canceled) return;
-            $('setMotecWorkspace').value = result.path;
-            await window.go.setSetting('motecWorkspace', result.path);
-            flashSaved();
+            try {
+                const result = await window.go.pickFile({
+                    title: 'Select MoTeC workspace (.w2k)',
+                    filters: [{ name: 'MoTeC workspace', extensions: ['w2k'] }],
+                });
+                if (result.canceled) return;
+                $('setMotecWorkspace').value = result.path;
+                await window.go.setSetting('motecWorkspace', result.path);
+                flashSaved();
+            } catch (err) {
+                console.error('Failed to pick MoTeC workspace:', err);
+            }
         });
     }
     const savedWorkspace = await window.go.getSetting('motecWorkspace');

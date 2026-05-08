@@ -1351,6 +1351,8 @@ async function runConversion(inputPath) {
 function showActiveConv(show) {
     const panel = $('activeConv');
     if (panel) panel.style.display = show ? '' : 'none';
+    const idle = $('convIdle');
+    if (idle) idle.style.display = show ? 'none' : '';
 }
 
 function updateActiveConv(pct, stage) {

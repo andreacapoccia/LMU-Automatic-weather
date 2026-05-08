@@ -455,6 +455,14 @@
       <span class="panel-aside">Auto-output to source folder</span>
     </div>
 
+    <!-- Idle state — visible when no conversion is in progress -->
+    <div class="conv-idle" id="convIdle">
+      <div class="tlm-empty-glyph">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-7 4 5 4-3 5 5"/><circle cx="8" cy="10" r="1.4" fill="currentColor"/><circle cx="12" cy="15" r="1.4" fill="currentColor"/><circle cx="16" cy="12" r="1.4" fill="currentColor"/></svg>
+      </div>
+      <div class="conv-idle-text">Waiting for conversion</div>
+    </div>
+
     <div class="active-conv" id="activeConv" style="display:none;">
       <div class="active-conv-head">
         <span class="active-conv-name">GO4_Spa_LMGT3_Q03_2026-05-01_14-22.duckdb</span>
@@ -498,9 +506,6 @@
 
     <!-- EMPTY STATE -->
     <div class="tlm-empty" id="sessionsEmpty" style="display:none;">
-      <div class="tlm-empty-glyph">
-        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-7 4 5 4-3 5 5"/><circle cx="8" cy="10" r="1.4" fill="currentColor"/><circle cx="12" cy="15" r="1.4" fill="currentColor"/><circle cx="16" cy="12" r="1.4" fill="currentColor"/></svg>
-      </div>
       <div class="tlm-empty-eyebrow">No sessions yet</div>
       <h3 class="tlm-empty-title">Set up the converter,<br/>your converted files will show here</h3>
       <p class="tlm-empty-sub">Drop a <code style="font-family:'JetBrains Mono',monospace;color:var(--text-2);">.duckdb</code> file above to convert it manually, or point GO at your LMU telemetry folder to convert sessions automatically as they land.</p>

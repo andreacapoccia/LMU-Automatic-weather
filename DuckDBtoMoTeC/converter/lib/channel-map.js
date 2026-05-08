@@ -8,8 +8,11 @@ const CHANNELS = [
   { motecName: 'Brake Pos',        shortName: 'Brk',  duckdbTable: 'Brake Pos',         unit: '%',    scale: 1,    isEvent: false, wheels: false },
   { motecName: 'Steering Pos',     shortName: 'Str',  duckdbTable: 'Steering Pos',      unit: '%',    scale: 1,    isEvent: false, wheels: false },
   { motecName: 'Ground Speed',     shortName: 'Spd',  duckdbTable: 'Ground Speed',      unit: 'km/h', scale: 1,    isEvent: false, wheels: false },
-  { motecName: 'G Force Lat',      shortName: 'GLat', duckdbTable: 'G Force Lat',       unit: 'G',    scale: 1,    isEvent: false, wheels: false },
-  { motecName: 'G Force Long',     shortName: 'GLng', duckdbTable: 'G Force Long',      unit: 'G',    scale: 1,    isEvent: false, wheels: false },
+  // LMU's "G Force Lat" table actually contains longitudinal accel (braking/throttle)
+  // and "G Force Long" contains lateral accel (cornering). Names are swapped at the
+  // source vs MoTeC convention, so we map across.
+  { motecName: 'G Force Lat',      shortName: 'GLat', duckdbTable: 'G Force Long',      unit: 'G',    scale: 1,    isEvent: false, wheels: false },
+  { motecName: 'G Force Long',     shortName: 'GLng', duckdbTable: 'G Force Lat',       unit: 'G',    scale: 1,    isEvent: false, wheels: false },
   { motecName: 'G Force Vert',     shortName: 'GVrt', duckdbTable: 'G Force Vert',      unit: 'G',    scale: 1,    isEvent: false, wheels: false },
   { motecName: 'Fuel Level',       shortName: 'Fuel', duckdbTable: 'Fuel Level',        unit: 'l',    scale: 1,    isEvent: false, wheels: false },
   { motecName: 'Water Temp',       shortName: 'WTmp', duckdbTable: 'Engine Water Temp', unit: 'C',    scale: 1,    isEvent: false, wheels: false },

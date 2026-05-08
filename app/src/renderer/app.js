@@ -1242,6 +1242,13 @@ async function initTelemetry() {
             enableSwitch.setAttribute('aria-checked', String(tlmState.watcherRunning));
         }
     });
+    // Keyboard activation for the role=button card (Space/Enter)
+    $('watcherToggle').addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault();
+            $('watcherToggle').click();
+        }
+    });
 
     $('wcConfigure').addEventListener('click', (e) => {
         e.stopPropagation();

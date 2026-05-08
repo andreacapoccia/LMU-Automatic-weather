@@ -99,6 +99,10 @@ ipcMain.handle('lmu:isAlive', async () => {
     return launcher.isLmuApiAlive();
 });
 
+ipcMain.handle('lmu:getNavState', async () => {
+    return launcher.getLmuNavState();
+});
+
 ipcMain.handle('lmu:fetchTracks', async () => {
     try {
         const list = await launcher.fetchTrackList();

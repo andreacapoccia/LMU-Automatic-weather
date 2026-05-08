@@ -66,6 +66,17 @@ function isLmuApiAlive() {
         .catch(() => false);
 }
 
+async function getLmuNavState() {
+    try {
+        const r = await fetch(`${API}/navigation/state`);
+        if (!r.ok) return { alive: false };
+        const j = await r.json();
+        return { alive: true, navigationState: j?.state?.navigationState || 'UNKNOWN' };
+    } catch {
+        return { alive: false };
+    }
+}
+
 function startLmuViaSteam() {
     // `start` resolves the steam:// protocol via the registered handler.
     execSync(`start "" "steam://run/${LMU_STEAM_APPID}"`, { shell: true });
@@ -396,6 +407,7 @@ async function launchSession({ track, overrides, emit }) {
 
 module.exports = {
     isLmuApiAlive,
+    getLmuNavState,
     waitForMainMenu,
     fetchTrackList,
     matchTrack,

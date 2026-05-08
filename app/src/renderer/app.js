@@ -55,14 +55,30 @@ function logLine(line, kind = '') {
     }
 }
 
-function setStatus(alive) {
+function setStatus(state) {
     const pill = $('lmuStatusPill');
-    const text = $('lmuStatusText');
     if (!pill) return;
+    const text = $('lmuStatusText');
+    const alive = !!state?.alive;
     pill.classList.toggle('offline', !alive);
-    if (text) text.textContent = alive ? 'LMU running · main menu' : 'LMU offline';
     const live = document.querySelector('.live');
     if (live) live.style.color = alive ? 'var(--green)' : 'var(--text-faint)';
+    if (!text) return;
+    if (!alive) { text.textContent = 'LMU offline'; return; }
+    const nav = state.navigationState || 'UNKNOWN';
+    text.textContent = `LMU running · ${navStateLabel(nav)}`;
+}
+
+function navStateLabel(nav) {
+    const map = {
+        NAV_MAIN_MENU: 'main menu',
+        NAV_GARAGE: 'garage',
+        NAV_DRIVING: 'in session',
+        NAV_LOADING: 'loading',
+        NAV_REPLAYS: 'replay',
+    };
+    if (map[nav]) return map[nav];
+    return nav.replace(/^NAV_/, '').toLowerCase().replace(/_/g, ' ');
 }
 
 function formatTime(minutes) {
@@ -585,13 +601,7 @@ async function onLaunch() {
 
 // ───────── Status polling ─────────
 async function pollStatus() {
-    try {
-        const alive = await window.go.isLmuAlive();
-        setStatus(alive);
-        if (alive) refreshLiveTracks();
-    } catch (_) {
-        setStatus(false);
-    }
+    try { setStatus(await window.go.getLmuNavState()); } catch { setStatus({ alive: false }); }
 }
 
 // ───────── Custom dropdown enhancer ─────────

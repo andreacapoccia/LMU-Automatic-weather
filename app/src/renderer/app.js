@@ -78,6 +78,7 @@ function navStateLabel(nav) {
         NAV_REPLAYS: 'replay',
     };
     if (map[nav]) return map[nav];
+    if (typeof nav !== 'string') return 'unknown';
     return nav.replace(/^NAV_/, '').toLowerCase().replace(/_/g, ' ');
 }
 

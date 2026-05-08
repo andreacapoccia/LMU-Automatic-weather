@@ -593,7 +593,7 @@ async function pollStatus() {
 
 // ───────── Custom dropdown enhancer ─────────
 function enhanceSelects(root = document) {
-    const selects = root.querySelectorAll('select.select:not([data-cdd-enhanced])');
+    const selects = root.querySelectorAll('select.select:not([data-cdd-enhanced]), select.s-select:not([data-cdd-enhanced])');
     selects.forEach((sel) => {
         sel.setAttribute('data-cdd-enhanced', '1');
         const wrapper = document.createElement('div');

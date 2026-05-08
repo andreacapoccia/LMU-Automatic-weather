@@ -165,25 +165,35 @@ ipcMain.handle('convert:run', (_e, { inputPath, outputDir }) => {
     });
 });
 
-ipcMain.handle('convert:startWatch', (_e, { watchDir, outputDir }) => {
-    if (watcherProcess) return { ok: false, reason: 'already running' };
+// Remember the last-used dirs so we can restart the watcher when settings
+// (e.g. outputNamingTemplate) change while it's running.
+let watcherDirs = null;
+
+function spawnWatcher(watchDir, outputDir) {
     const namingTemplate = settings.get('outputNamingTemplate', '');
     const args = [path.join(CONVERTER_DIR, 'watcher.js'), watchDir, outputDir];
     if (namingTemplate) args.push(namingTemplate);
-    watcherProcess = spawn('node', args);
-    watcherProcess.stdout.on('data', chunk => {
+    const proc = spawn('node', args);
+    proc.stdout.on('data', chunk => {
         for (const line of chunk.toString().split('\n').filter(Boolean))
             try { if (mainWindow) mainWindow.webContents.send('convert:log', line); } catch (_) {}
     });
-    watcherProcess.stderr.on('data', chunk => {
+    proc.stderr.on('data', chunk => {
         try { if (mainWindow) mainWindow.webContents.send('convert:log', chunk.toString()); } catch (_) {}
     });
-    watcherProcess.on('close', () => { watcherProcess = null; });
+    proc.on('close', () => { if (watcherProcess === proc) { watcherProcess = null; watcherDirs = null; } });
+    return proc;
+}
+
+ipcMain.handle('convert:startWatch', (_e, { watchDir, outputDir }) => {
+    if (watcherProcess) return { ok: false, reason: 'already running' };
+    watcherProcess = spawnWatcher(watchDir, outputDir);
+    watcherDirs = { watchDir, outputDir };
     return { ok: true };
 });
 
 ipcMain.handle('convert:stopWatch', () => {
-    if (watcherProcess) { watcherProcess.kill(); watcherProcess = null; }
+    if (watcherProcess) { watcherProcess.kill(); watcherProcess = null; watcherDirs = null; }
     return { stopped: true };
 });
 
@@ -243,4 +253,15 @@ ipcMain.handle('convert:delete', async (_e, ldPath) => {
 });
 
 ipcMain.handle('settings:get', (_e, key) => settings.get(key));
-ipcMain.handle('settings:set', (_e, key, value) => { settings.set(key, value); return { ok: true }; });
+ipcMain.handle('settings:set', (_e, key, value) => {
+    settings.set(key, value);
+    // If the watcher is running and a setting that affects its spawn args
+    // changed, restart it so the new value takes effect immediately.
+    if (key === 'outputNamingTemplate' && watcherProcess && watcherDirs) {
+        const dirs = watcherDirs;
+        watcherProcess.kill();
+        watcherProcess = spawnWatcher(dirs.watchDir, dirs.outputDir);
+        watcherDirs = dirs;
+    }
+    return { ok: true };
+});

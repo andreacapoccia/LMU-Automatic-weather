@@ -1171,6 +1171,10 @@ async function refreshFirstRunCard() {
 
 // ───────── Telemetry boot ─────────
 async function initTelemetry() {
+    // Restore sessions from persistent storage
+    const stored = await window.go.getSetting('convertedSessions');
+    if (Array.isArray(stored)) tlmState.sessions = stored;
+
     // Tab switching
     document.querySelectorAll('.tab').forEach((t) => {
         t.addEventListener('click', () => switchView(t.dataset.view));
@@ -1434,6 +1438,12 @@ function updateActiveConv(pct, stage) {
 }
 
 // ───────── Sessions list ─────────
+async function persistSessions() {
+    // Cap at 200 to bound settings file growth. New sessions unshift to
+    // position 0, so slice(0, 200) keeps the newest 200.
+    await window.go.setSetting('convertedSessions', tlmState.sessions.slice(0, 200));
+}
+
 function addSession(ldPath, status) {
     const existing = tlmState.sessions.findIndex((s) => s.ldPath === ldPath);
     const baseName = ldPath.replace(/\\/g, '/').split('/').pop().replace(/\.ld$/i, '');
@@ -1456,6 +1466,7 @@ function addSession(ldPath, status) {
     } else {
         tlmState.sessions.unshift(session);
     }
+    persistSessions();   // fire-and-forget; cap-trim happens inside
     renderSessionsGrid();
     updateTlmSummary();
 }
@@ -1545,6 +1556,7 @@ async function handleSessionAction(action, session) {
         const result = await window.go.deleteConversion(session.ldPath);
         if (result.ok) {
             tlmState.sessions = tlmState.sessions.filter((s) => s.ldPath !== session.ldPath);
+            persistSessions();
             renderSessionsGrid();
             updateTlmSummary();
         }

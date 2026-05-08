@@ -1018,6 +1018,18 @@ async function initDrawer() {
             await window.go.setSetting('watchDir', result.path);
             updateWatcherCard();
             flashSaved();
+            await refreshFirstRunCard();
+        });
+    }
+
+    const detectBtn = $('detectWatchPath');
+    if (detectBtn) {
+        detectBtn.addEventListener('click', async () => {
+            const defaultPath = await window.go.getDefaultWatchPath();
+            $('setWatchPath').value = defaultPath;
+            await window.go.setSetting('watchDir', defaultPath);
+            flashSaved();
+            refreshFirstRunCard();
         });
     }
 
@@ -1108,6 +1120,14 @@ function isThisWeek(t) {
     return t >= Date.now() - 7 * 24 * 60 * 60 * 1000;
 }
 
+async function refreshFirstRunCard() {
+    const card = document.getElementById('firstRunCard');
+    if (!card) return;
+    const watchDir = await window.go.getSetting('watchDir') || '';
+    const dismissed = await window.go.getSetting('firstRunDismissed') || false;
+    card.style.display = (!watchDir && !dismissed) ? '' : 'none';
+}
+
 // ───────── Telemetry boot ─────────
 async function initTelemetry() {
     // Tab switching
@@ -1148,11 +1168,7 @@ async function initTelemetry() {
     updateWatcherCard();
 
     // First-run card: show if no watch folder configured
-    const firstRunCard = $('firstRunCard');
-    if (firstRunCard) {
-        const dismissed = await window.go.getSetting('firstRunDismissed') || false;
-        firstRunCard.style.display = (!watchDir && !dismissed) ? '' : 'none';
-    }
+    await refreshFirstRunCard();
 
     $('firstRunCta').addEventListener('click', () => { if (window._openDrawer) window._openDrawer('auto'); });
     $('firstRunDismiss').addEventListener('click', async () => {

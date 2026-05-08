@@ -439,7 +439,7 @@
       </span>
       <span class="wc-meta">
         <span class="wc-title">Watch folder <span class="wc-state" id="watcherStateText">OFF</span></span>
-        <span class="wc-path" id="watcherPath">…\Documents\Le Mans Ultimate\UserData\Replays</span>
+        <span class="wc-path" id="watcherPath">…\Documents\Le Mans Ultimate\UserData\Telemetry</span>
       </span>
       <button type="button" class="wc-configure" id="wcConfigure" title="Open watcher settings">Configure</button>
     </div>
@@ -612,12 +612,12 @@
           <div class="setting-row stack">
             <div class="setting-label">
               <span class="lbl">Watch folder</span>
-              <span class="hint">GO checks this folder for new sessions every 2 seconds. Defaults to LMU's <code style="font-family:'JetBrains Mono',monospace;">UserData\Replays</code>.</span>
+              <span class="hint">GO checks this folder for new sessions every 2 seconds. Defaults to LMU's <code style="font-family:'JetBrains Mono',monospace;">UserData\Telemetry</code>.</span>
             </div>
             <div class="s-path-row">
-              <input class="s-input mono" id="setWatchPath" value="C:\Users\Mateo\Documents\Le Mans Ultimate\UserData\Replays" />
+              <input class="s-input mono" id="setWatchPath" value="" />
               <button class="s-btn" id="browseWatchPath">Browse…</button>
-              <button class="s-btn" title="Auto-detect">Detect</button>
+              <button class="s-btn" id="detectWatchPath" title="Auto-detect">Detect</button>
             </div>
           </div>
 

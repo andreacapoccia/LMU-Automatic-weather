@@ -216,6 +216,10 @@ ipcMain.handle('dialog:pickFolder', async (_e, { title } = {}) => {
     return { canceled: false, path: result.filePaths[0] };
 });
 
+ipcMain.handle('app:getDefaultWatchPath', () => {
+    return path.join(app.getPath('documents'), 'Le Mans Ultimate', 'UserData', 'Telemetry');
+});
+
 ipcMain.handle('dialog:pickFile', async (_e, { title, filters } = {}) => {
     const result = await dialog.showOpenDialog(mainWindow, {
         title: title || 'Select file',

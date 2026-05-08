@@ -1091,11 +1091,22 @@ async function initDrawer() {
 
 // ───────── Telemetry state ─────────
 const tlmState = {
-    sessions: [],      // { ldPath, ldxPath, track, car, cls, fastest, laps, date, status }
+    sessions: [],      // { ldPath, ldxPath, track, car, cls, fastest, laps, convertedAt, date, status }
     watcherRunning: false,
-    filterStatus: 'all',
+    filterMode: 'all', // 'all' | 'today' | 'week'
     searchQuery: '',
 };
+
+// True if `convertedAt` (epoch ms) falls between midnight today and now.
+function isToday(t) {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    return t >= start.getTime();
+}
+
+// True if `convertedAt` falls within the last 7 days.
+function isThisWeek(t) {
+    return t >= Date.now() - 7 * 24 * 60 * 60 * 1000;
+}
 
 // ───────── Telemetry boot ─────────
 async function initTelemetry() {
@@ -1224,7 +1235,7 @@ async function initTelemetry() {
         c.addEventListener('click', () => {
             document.querySelectorAll('.filter-chip').forEach((x) => x.classList.remove('active'));
             c.classList.add('active');
-            tlmState.filterStatus = c.dataset.filter;
+            tlmState.filterMode = c.dataset.filter;
             renderSessionsGrid();
         });
     });
@@ -1355,6 +1366,7 @@ function updateActiveConv(pct, stage) {
 function addSession(ldPath, status) {
     const existing = tlmState.sessions.findIndex((s) => s.ldPath === ldPath);
     const baseName = ldPath.replace(/\\/g, '/').split('/').pop().replace(/\.ld$/i, '');
+    const now = new Date();
     const session = {
         ldPath,
         ldxPath: ldPath.replace(/\.ld$/i, '.ldx'),
@@ -1364,7 +1376,8 @@ function addSession(ldPath, status) {
         cls: '',
         fastest: '—',
         laps: 0,
-        date: new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        convertedAt: now.getTime(),  // epoch ms — used by today/week filters
+        date: now.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
         status,
     };
     if (existing >= 0) {
@@ -1391,7 +1404,8 @@ function renderSessionsGrid() {
 
     const q = tlmState.searchQuery.trim().toLowerCase();
     let list = tlmState.sessions;
-    if (tlmState.filterStatus !== 'all') list = list.filter((s) => s.status === tlmState.filterStatus);
+    if (tlmState.filterMode === 'today') list = list.filter((s) => isToday(s.convertedAt));
+    else if (tlmState.filterMode === 'week') list = list.filter((s) => isThisWeek(s.convertedAt));
     if (q) list = list.filter((s) => (s.baseName + ' ' + s.track + ' ' + s.car).toLowerCase().includes(q));
 
     const emptyEl = $('sessionsEmpty');
@@ -1467,10 +1481,15 @@ async function handleSessionAction(action, session) {
 }
 
 function updateTlmSummary() {
+    const all = tlmState.sessions.length;
+    const today = tlmState.sessions.filter((s) => isToday(s.convertedAt)).length;
+    const week = tlmState.sessions.filter((s) => isThisWeek(s.convertedAt)).length;
     const badge = $('tabBadgeTlm');
-    const count = tlmState.sessions.length;
     if (badge) {
-        badge.textContent = count;
-        badge.style.display = count > 0 ? '' : 'none';
+        badge.textContent = all;
+        badge.style.display = all > 0 ? '' : 'none';
     }
+    const fcAll = $('fcAll'); if (fcAll) fcAll.textContent = all;
+    const fcToday = $('fcToday'); if (fcToday) fcToday.textContent = today;
+    const fcWeek = $('fcWeek'); if (fcWeek) fcWeek.textContent = week;
 }

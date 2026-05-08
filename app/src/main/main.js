@@ -231,15 +231,27 @@ ipcMain.handle('dialog:pickFile', async (_e, { title, filters } = {}) => {
 });
 
 ipcMain.handle('motec:open', async (_e, ldPath) => {
-    // Try Windows file association first — ShellExecute properly delegates to
-    // MoTeC's existing instance if running (avoids the single-instance bug
-    // where spawning motec.exe directly opens MoTeC with no file loaded).
+    const motecExe = settings.get('motecExe', '');
+    const motecWorkspace = settings.get('motecWorkspace', '');
+
+    // If user has both an exe AND a workspace configured, launch via shell
+    // so the existing MoTeC instance receives both args. Workspace must come
+    // first in MoTeC i2's argv.
+    if (motecExe && motecWorkspace) {
+        return new Promise((resolve) => {
+            const child = spawn('cmd', ['/c', 'start', '""', motecExe, motecWorkspace, ldPath], { detached: true, stdio: 'ignore' });
+            child.on('error', (err) => resolve({ ok: false, error: err.message }));
+            child.unref();
+            setTimeout(() => resolve({ ok: true }), 200);
+        });
+    }
+
+    // Try Windows file association first — ShellExecute properly delegates
+    // to MoTeC's existing instance if running.
     const shellError = await shell.openPath(ldPath);
     if (!shellError) return { ok: true };
 
-    // Fallback: user has motecExe configured — launch via cmd start so the
-    // arg goes through the shell and reaches the running MoTeC instance.
-    const motecExe = settings.get('motecExe', '');
+    // Fallback: motecExe set but no workspace — launch via cmd start.
     if (motecExe) {
         return new Promise((resolve) => {
             const child = spawn('cmd', ['/c', 'start', '""', motecExe, ldPath], { detached: true, stdio: 'ignore' });

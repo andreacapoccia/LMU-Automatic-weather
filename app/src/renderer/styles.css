@@ -128,7 +128,7 @@ body { display: flex; flex-direction: column; }
   flex: 1; overflow-y: auto;
   padding: 22px;
   display: grid;
-  grid-template-columns: 1fr 1.15fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1fr);
   grid-template-rows: auto auto auto;
   grid-template-areas:
     'track car weather'
@@ -250,6 +250,7 @@ body { display: flex; flex-direction: column; }
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€ Form controls â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .select {
   width: 100%;
+  min-width: 0;
   color: var(--text);
   background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
   border: 1px solid var(--line);
@@ -300,7 +301,7 @@ body { display: flex; flex-direction: column; }
 }
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€ Custom dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-.cdd { position: relative; width: 100%; }
+.cdd { position: relative; width: 100%; min-width: 0; }
 .cdd-trigger {
   width: 100%;
   display: flex; align-items: center; justify-content: space-between;
@@ -1141,7 +1142,7 @@ body { display: flex; flex-direction: column; }
 .hidden { display: none !important; }
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€ Field / range â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-.field { display: flex; flex-direction: column; gap: 6px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field-label {
   display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
   font-family: 'JetBrains Mono', monospace;

@@ -1449,7 +1449,10 @@ function renderSessionsGrid() {
 
 async function handleSessionAction(action, session) {
     if (action === 'open') {
-        await window.go.motecOpen(session.ldPath);
+        const result = await window.go.motecOpen(session.ldPath);
+        if (!result?.ok) {
+            alert(result?.error || 'Failed to open MoTeC i2');
+        }
     } else if (action === 'reveal') {
         await window.go.revealInFolder(session.ldPath);
     } else if (action === 'delete') {

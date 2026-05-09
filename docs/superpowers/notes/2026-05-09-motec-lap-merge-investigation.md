@@ -1,118 +1,81 @@
-# MoTeC lap-merge bug — investigation notes
+# MoTeC lap-merge bug — investigation notes (RESOLVED 2026-05-10)
 
-**Status:** Investigation in progress. G-force fix shipped; lap fix not yet implemented.
-**Resume from:** Step 5 below ("Inspect the reference .ld file's beacon channel").
+**Status:** Resolved. All four bugs identified and fixed. Shipped in v3.0.3.
 
 ## What the user reported
 
 > Lateral and Longitudinal G Forces telemetry channels are swapped around.
-> In the files we're converting from duckdb to motec, we're merging the first lap
-> (coming out of the pits) with lap1, and the last lap (the last lap after crossing
-> the line) with the last full lap.
+> In the files we're converting from duckdb to motec, we're merging the first
+> lap (coming out of the pits) with lap1.
 
-Later clarified: "the inlap is absolutely fine, it's the outlap that's mixed up".
+## What turned out to be wrong
 
-## What's been done
+The bug was actually **four separate issues**, all in the duckdb→MoTeC converter:
 
-### G-force swap — FIXED (commit `12f32bc`)
-LMU's `G Force Lat` table actually contains longitudinal accel and `G Force Long`
-contains lateral accel. Naming is reversed vs MoTeC i2's convention.
-Fix: swapped `duckdbTable` mapping in `DuckDBtoMoTeC/converter/lib/channel-map.js`.
-User confirmed the bug is just channel-swap (not sign-flip).
+### 1. G-force channels swapped — commit `12f32bc`
 
-### Lap merge — diagnostic data captured, fix NOT yet implemented
+**Symptom:** Lateral G shows braking pulses, longitudinal G shows cornering pulses.
 
-User dropped 4 .ld files in `C:/Users/andre/Desktop/GO-LMU-debug/`:
+**Root cause:** LMU's `G Force Lat` table contains longitudinal accel; `G Force Long` contains lateral. Naming reversed vs MoTeC convention.
 
-| File | Source | Size | LDX laps | Fastest |
-|------|--------|------|---------:|--------:|
-| `Autodromo Nazionale Monza_P_2026-05-08T03_07_43Z.ld` | **Ours** | 4 MB | (no .ldx?) | — |
-| `2026-05-08 - 05-07-42 - Autodromo Nazionale Monza - P1.ld` | **Reference** (other tool) | 6 MB | — | — |
-| `Paul Ricard Circuit_R_2026-05-07T18_55_27Z.ld` | **Ours** | 38 MB | 28 | 10 (1:41.844) |
-| `2026-05-07 - 20-55-28 - Paul Ricard - 1A-V2 - R1.ld` | **Reference** (other tool) | 57 MB | 29 | 11 (1:41.835) |
+**Fix:** Swap the `duckdbTable` mapping for these two rows in `channel-map.js`.
 
-Distinguishing trait: ours has `metaStart=11336` and 57 channels with chanId
-starting at 12001; reference has `metaStart=13384` and 78 channels with MoTeC
-standard chanIds (9, 301, 302, …). **The reference is from a different
-LMU→MoTeC converter (probably what the user used before us).**
+### 2. Trailing beacon dropped — commit `61741e1`
 
-## Inspector script
+**Symptom (caught via inspector, not user-reported):** Last hot lap merged with in-lap when the lap completes within the last second of recording.
 
-Saved at `DuckDBtoMoTeC/converter/inspect-ld.js`. Auto-detects `metaStart`
-from the file header; works on both our output and reference files.
+**Root cause:** `nBeacon = round(duration)`, then bound check `if (si >= nBeacon) continue` silently dropped a crossing where `ceil(t) == nBeacon`.
 
-```bash
-node DuckDBtoMoTeC/converter/inspect-ld.js path/to/file.ld
-```
+**Fix:** Bumped buffer to make room; later refined.
 
-Dumps Beacon (chanId=110), Lap Number (chanId=2101), Marker (chanId=310)
-channels, including reconstructed crossing timestamps and lap-number
-transitions.
+### 3. Late beacons clipped by MoTeC — commit `450aabe`
 
-## Findings so far
+**Symptom:** Even after fix #2 emitted the trailing beacon (verified by inspector), MoTeC still merged the last hot lap with the in-lap.
 
-### Monza practice (ours)
-- 312s recording, 3 lap-number transitions: t=114.57 (lap 4→5), t=214.01 (5→6), t=311.11 (6→7)
-- Only **2 beacons** emitted: at sample 115 and sample 215
-- The third transition at t=311.11 has NO beacon
-- Why: `duckdb-reader.js:139` checks `si >= nBeacon` and skips. For t=311.11,
-  `si = ceil(311.11) = 312`, `nBeacon = 312` → skipped.
-- Effect: MoTeC merges the last hot lap (LMU lap 6) with the tiny in-lap (LMU lap 7).
-  In this file the in-lap is only 0.89s so the user might not notice.
+**Root cause:** Two related issues:
+- MoTeC clips the beacon channel at the *highest-frequency channel's* effective duration. A marker at sample `ceil(duration)` lands AT or PAST that boundary and is silently dropped by MoTeC.
+- MoTeC needs trailing "100" samples after the marker triple (marker / id / sub-second) to recognize the marker as a valid crossing.
 
-### Paul Ricard race (ours)
-- 2938s recording, 27 lap-number transitions, 27 beacons (1:1 match)
-- First beacon at sample 260 (t=259.41s, lap 0→1) — end of formation/warm-up lap
-- LDX says 28 total laps; **reference says 29**
+**Fix:**
+- Cap `si` at `floor(duration * freq)` so the marker stays inside the telemetry window.
+- Bump buffer from +3 to +10 samples so trailing 100s always fit.
 
-### Out-lap merge hypothesis (the user's actual complaint)
-The user's reference `.ldx` shows 29 laps with fastest at lap 11.
-Ours shows 28 laps with fastest at lap 10 — **off by exactly one lap, with
-fastest one number earlier**.
+### 4. Formation-lap S/F missing from Lap table — commit `1732640`
 
-This pattern is consistent with: the reference inserts a beacon BEFORE the
-formation lap (at t≈0) so its "Lap 1 = formation, Lap 2 = race lap 1, …,
-Lap 11 = race lap 10 (fastest)". Our output has no t=0 beacon, so MoTeC
-treats the formation lap as just the pre-first-beacon segment — which it
-labels "Lap 1" but the lap-number channel value during it is 0, possibly
-confusing MoTeC's interpretation.
+**Symptom (the original user complaint):** In a race session, MoTeC's "Out Lap" was 4:19 (the entire formation period 0→259s) instead of being split into Out Lap (~2:29 = grid-to-S/F) + Lap 1 (~1:49 = S/F-to-S/F formation completion).
 
-## Where to resume tomorrow
+**Root cause:** LMU's `Lap` table only records POST-race-start S/F crossings. The formation-lap's S/F crossing at t≈149s isn't in there, so our converter had no source for that beacon.
 
-1. **Inspect the reference .ld file's beacon channel.** The reference uses a
-   different `metaStart` (13384) and different chanId conventions, so confirm
-   the inspector handles that correctly. Compare beacon count and timing to
-   ours. Specifically: does the reference have an extra beacon at t=0 or
-   somewhere we don't?
+**Fix:** Use the `Current Sector` event channel as the beacon source instead of `Lap`. Each `val=1` transition (entering sector 1 from any other sector) is a S/F crossing — including the formation lap. `Lap` table still drives the Lap Number channel for numerical labels. Falls back to Lap table if Current Sector isn't present.
 
-   ```bash
-   node DuckDBtoMoTeC/converter/inspect-ld.js \
-     "C:/Users/andre/Desktop/GO-LMU-debug/2026-05-07 - 20-55-28 - Paul Ricard - 1A-V2 - R1.ld"
-   ```
+## Diagnostic tools created during investigation
 
-   The chanId for Beacon may not be 110 in the reference's MoTeC-standard
-   numbering. May need to extend the inspector to find by name pattern only.
+- **`DuckDBtoMoTeC/converter/inspect-ld.js`** — committed. Reads back Beacon, Lap Number, Marker channels from a .ld file. Auto-detects metaStart so it works on both our output (11336) and other tools' MoTeC-native output (13384).
+- **`c:/tmp/inspect-ld-float-beacon.js`** — local-only. Same as above but handles float32 Beacon channels (used by MoTeC i2 native re-saves and some third-party converters).
+- **`c:/tmp/dump-laps.js`** — local-only. Dumps the LMU `Lap` table + GPS Time bounds + metadata from a .duckdb file.
 
-2. **Fix the trailing beacon bug.** In `duckdb-reader.js:139`, change the
-   bound check or rounding so a crossing in the last second of recording
-   isn't dropped. Two candidate fixes:
-   - Change `Math.ceil(t * beaconFreq)` → `Math.floor(t * beaconFreq)` (also
-     fixes a potential 1-second offset; but may break MoTeC's existing
-     interpretation — needs reverse-engineering).
-   - Extend the beacon channel by 1 sample so the trailing crossing fits.
+## Validation
 
-3. **Investigate the out-lap merge.** Need a sample `.duckdb` file (not just
-   `.ld`) to see what the LMU `Lap` table actually contains for a session
-   with formation lap. Ask user to drop one in `GO-LMU-debug/`, then:
-   ```bash
-   # Quick query to dump Lap table from a duckdb file
-   node -e "const d=require('duckdb');const c=new d.Database(':memory:').connect();c.run(\"ATTACH 'PATH' AS s (READ_ONLY)\",()=>c.all('SELECT ts,value FROM s.\"Lap\" ORDER BY ts',(_,r)=>{console.log(r);process.exit()}))"
-   ```
+| File | Source | Crossings | MoTeC structure |
+|------|--------|----------:|-----------------|
+| Paul Ricard race | user duckdb | 28 (was 27) | Out + 27 numbered + In Lap, fastest #11 ✓ matches reference |
+| Monza practice | user duckdb | 3 | Out + 2 numbered + In Lap ✓ |
+| Q04 example | bundled | 4 | no regression ✓ |
 
-4. Once both bugs are understood, write spec → plan → fix.
+## Channels we still don't emit (potential future work)
 
-## Files touched this session
+The MoTeC-native reference files have several extra channels we don't generate. None are required for lap detection, but some would improve the analysis experience:
 
-- `DuckDBtoMoTeC/converter/lib/channel-map.js` — G-force swap (committed `12f32bc`)
-- `DuckDBtoMoTeC/converter/inspect-ld.js` — new diagnostic tool (uncommitted)
-- `docs/superpowers/notes/2026-05-09-motec-lap-merge-investigation.md` — this file (uncommitted)
+- `Session Elapsed Time` (id=2100, 50Hz) — continuous time channel
+- `Delta Best` (id=5, 5Hz) — gap to best lap, computed
+- `Realtime Loss` (id=200, 1Hz)
+- `Max Straight Speed` / `Min Corner Speed` (per-lap aggregates, id=20/21)
+- Sector markers via Beacon (the reference has ~2.5x more crossings than us, all sector S1/S2 entry markers — could be added by extending Current Sector to emit beacons for val=2 transitions too, with a different crossing-ID range)
+
+## Files touched (committed)
+
+- `DuckDBtoMoTeC/converter/lib/channel-map.js` — G-force swap
+- `DuckDBtoMoTeC/converter/lib/duckdb-reader.js` — beacon emission (3 separate commits)
+- `DuckDBtoMoTeC/converter/inspect-ld.js` — new diagnostic tool
+- `app/package.json`, `app/src/renderer/index.html` — version bumps
+- `docs/superpowers/notes/2026-05-09-motec-lap-merge-investigation.md` — this file

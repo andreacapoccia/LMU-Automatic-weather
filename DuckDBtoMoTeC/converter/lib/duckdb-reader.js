@@ -128,21 +128,29 @@ async function readSession(dbPath) {
     // holds 100 between crossings. Skip laps[0] if ts == sessionStart
     // (LMU init event, not a real crossing). Use Math.ceil so t=0.8s → sample 1.
     //
-    // Buffer: Math.ceil(duration) gives room for any t in [0, duration); +3
-    // additional samples leave room for the crossing's marker / id / sub-second
-    // triple even when the lap completes within the last second of recording.
-    // Without this, the trailing crossing was silently dropped, merging the
-    // last hot lap with the in-lap.
+    // Two related sizing concerns:
+    //  (1) MoTeC clips the beacon channel at the telemetry end (the highest-
+    //      frequency channel's effective duration). A marker at sample
+    //      ceil(duration) lands AT or PAST that boundary and is silently
+    //      dropped — so we cap si at floor(duration) below.
+    //  (2) MoTeC needs trailing "100" samples after a marker triple
+    //      (marker / id / sub-second) to recognize the crossing. We pad
+    //      nBeacon with +10 extra samples so a late crossing always has
+    //      room for the triple plus several trailing 100s.
     const beaconFreq = 1;
-    const nBeacon = Math.max(1, Math.ceil(sessionDuration * beaconFreq) + 3);
+    const maxValidSi = Math.floor(sessionDuration * beaconFreq);
+    const nBeacon = Math.max(1, Math.ceil(sessionDuration * beaconFreq) + 10);
     const beaconData = new Array(nBeacon).fill(0);
     let prevSi = -1;
     let crossingCount = 0;
     for (let i = 0; i < laps.length; i++) {
       const t = laps[i].ts - sessionStart;
       if (t < 0.01) continue;                                            // skip init event at t≈0
-      const si = Math.ceil(t * beaconFreq);
-      if (si <= 0 || si >= nBeacon) continue;
+      let si = Math.ceil(t * beaconFreq);
+      if (si <= 0) continue;
+      // Late crossings: cap at last sample within telemetry duration so
+      // MoTeC doesn't clip the marker.
+      if (si > maxValidSi) si = maxValidSi;
       // Fill 100 from end of previous crossing to just before this one
       if (prevSi >= 0) {
         for (let k = prevSi + 3; k < si; k++) beaconData[k] = 100;

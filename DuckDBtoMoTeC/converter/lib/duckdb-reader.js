@@ -127,8 +127,14 @@ async function readSession(dbPath) {
     // Beacon (Internal) at 1 Hz. Starts at 0 before first crossing, then
     // holds 100 between crossings. Skip laps[0] if ts == sessionStart
     // (LMU init event, not a real crossing). Use Math.ceil so t=0.8s → sample 1.
+    //
+    // Buffer: Math.ceil(duration) gives room for any t in [0, duration); +3
+    // additional samples leave room for the crossing's marker / id / sub-second
+    // triple even when the lap completes within the last second of recording.
+    // Without this, the trailing crossing was silently dropped, merging the
+    // last hot lap with the in-lap.
     const beaconFreq = 1;
-    const nBeacon = Math.max(1, Math.round(sessionDuration * beaconFreq));
+    const nBeacon = Math.max(1, Math.ceil(sessionDuration * beaconFreq) + 3);
     const beaconData = new Array(nBeacon).fill(0);
     let prevSi = -1;
     let crossingCount = 0;

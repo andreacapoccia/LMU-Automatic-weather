@@ -34,9 +34,33 @@ async function readSession(dbPath) {
     if (!gpsRows.length) throw new Error('GPS Time table is empty');
     const sessionStart = gpsRows[0].value;
 
-    // Lap boundaries
+    // Lap boundaries (LMU's Lap table records POST-race-start S/F crossings only —
+    // formation-lap crossings during a race are missing here, breaking out-lap
+    // separation in MoTeC. We still use it for the Lap Number channel since it's
+    // the source of numerical lap labels.)
     const lapRows = await query(con, 'SELECT ts, value FROM "Lap" ORDER BY ts');
     const laps = lapRows.map(r => ({ ts: r.ts, lapNum: r.value }));
+
+    // S/F crossings for the Beacon channel — we read Current Sector instead of
+    // Lap because the former records EVERY sector-1 entry, including the
+    // formation-lap S/F crossing. A val=1 transition (from any other value)
+    // means the driver just crossed S/F. The init entry at t≈sessionStart is
+    // not a crossing, so we skip it via the prevVal===null guard.
+    let beaconTimes;
+    try {
+      const sectorRows = await query(con, 'SELECT ts, value FROM "Current Sector" ORDER BY ts');
+      const crossings = [];
+      let prevVal = null;
+      for (const r of sectorRows) {
+        if (r.value === 1 && prevVal !== null && prevVal !== 1) crossings.push(r.ts);
+        prevVal = r.value;
+      }
+      beaconTimes = crossings;
+    } catch {
+      // Older recordings without Current Sector: fall back to Lap table
+      // (loses formation-lap separation but stays functional).
+      beaconTimes = laps.slice(1).map(l => l.ts);
+    }
 
     // Session length in samples at 100 Hz
     const [{ n: totalSamples100HzRaw }] = await query(con, 'SELECT COUNT(*) as n FROM "GPS Time"');
@@ -125,8 +149,9 @@ async function readSession(dbPath) {
     });
 
     // Beacon (Internal) at 1 Hz. Starts at 0 before first crossing, then
-    // holds 100 between crossings. Skip laps[0] if ts == sessionStart
-    // (LMU init event, not a real crossing). Use Math.ceil so t=0.8s → sample 1.
+    // holds 100 between crossings. Source is `beaconTimes` (Current Sector
+    // val=1 transitions, with init skipped) — see comment above.
+    // Use Math.ceil so t=0.8s → sample 1.
     //
     // Two related sizing concerns:
     //  (1) MoTeC clips the beacon channel at the telemetry end (the highest-
@@ -143,9 +168,9 @@ async function readSession(dbPath) {
     const beaconData = new Array(nBeacon).fill(0);
     let prevSi = -1;
     let crossingCount = 0;
-    for (let i = 0; i < laps.length; i++) {
-      const t = laps[i].ts - sessionStart;
-      if (t < 0.01) continue;                                            // skip init event at t≈0
+    for (let i = 0; i < beaconTimes.length; i++) {
+      const t = beaconTimes[i] - sessionStart;
+      if (t < 0.01) continue;                                            // safety: skip anything at session start
       let si = Math.ceil(t * beaconFreq);
       if (si <= 0) continue;
       // Late crossings: cap at last sample within telemetry duration so

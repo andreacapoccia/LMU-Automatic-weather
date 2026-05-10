@@ -580,6 +580,7 @@ function bindEnableToggles() {
     });
 }
 
+let _customHintShown = false;
 function bindWeatherPresetPills() {
     document.querySelectorAll('.weather-preset-row .wx-pill').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -589,6 +590,13 @@ function bindWeatherPresetPills() {
             btn.parentElement.querySelectorAll('.wx-pill').forEach(b => b.classList.toggle('active', b === btn));
             const customPanel = document.querySelector(`.custom-weather[data-custom-for="${sk}"]`);
             if (customPanel) customPanel.classList.toggle('hidden', preset !== 'custom');
+            // Path B: actual game weather follows the closest of 3 captured blobs
+            // (dry / overcast_rain / storm), picked by avg rain%. Slice values
+            // drive the in-game forecast display only. Show this hint once per session.
+            if (preset === 'custom' && !_customHintShown) {
+                _customHintShown = true;
+                logLine('Custom weather is approximated (uses closest of 3 captured weather profiles). Slice values affect the in-game forecast display only.', '');
+            }
             updateSummary();
         });
     });

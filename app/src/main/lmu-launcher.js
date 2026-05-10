@@ -253,9 +253,9 @@ function composeSession({ presetJson, liveSelection, overrides }) {
 
     // Resolve which captured blob to send. "custom" picks based on rain%.
     let blobName;
-    const practiceWp = o.sessions?.practice?.weatherPreset ?? o.weatherPreset ?? 'dry';
+    const practiceWp = o.sessions?.practice?.weatherPreset ?? 'dry';
     if (practiceWp === 'custom') {
-        const cw0 = o.sessions?.practice?.customWeather?.[0] || o.customWeather || {};
+        const cw0 = o.sessions?.practice?.customWeather?.[0] || {};
         blobName = pickBlobForCustomRain(Number(cw0.rainChance) || 0);
     } else {
         blobName = WEATHER_PRESETS.includes(practiceWp) ? practiceWp : 'dry';
@@ -279,12 +279,42 @@ function composeSession({ presetJson, liveSelection, overrides }) {
     sp.Player.DRIVER.Vehicle = vehicleStr;
 
     // Apply user overrides to Game Options + Race Conditions.
-    const practice = o.sessions?.practice || {};
-    sp.Player['Game Options']['practice length'] = Number(practice.length ?? o.practiceLength ?? 60);
+    //
+    // Per-session writes (D3). Field names verified against gosetups-template.json:
+    //   - 'practice length', 'qualifying length' verified (lowercase with space).
+    //   - 'Race Time' used for race duration (minutes); template has no 'race length' key.
+    //   - Practice1StartingTime verified; QualifyingStartingTime verified (NOT Qualify1StartingTime).
+    //   - RaceStartingTime verified. PrivateQualifying verified (template uses integer 1/0).
+    //   - RealRoadTimeScalePractice/Qualifying/Race all verified.
+    //   - RaceStartType is INFERRED (not present in template; written speculatively).
+    const sessions = o.sessions || {};
+    const SESSION_MAP = [
+        // [stateKey, Game Options length field,  startTimeField,           privateField,        realRoadField]
+        ['practice',   'practice length',           'Practice1StartingTime',   'PrivatePractice',   'RealRoadTimeScalePractice'],
+        ['qualifying', 'qualifying length',          'QualifyingStartingTime',  'PrivateQualifying', 'RealRoadTimeScaleQualifying'],
+        ['race',       'Race Time',                  'RaceStartingTime',         null,                'RealRoadTimeScaleRace'],
+    ];
+
+    for (const [sKey, lenField, startField, privField, rrField] of SESSION_MAP) {
+        const ss = sessions[sKey] || {};
+        const enabled = ss.enabled !== false; // undefined → treat as enabled
+        const length = enabled ? Number(ss.length ?? 60) : 1;  // 1-min for disabled (LMU still shows it; see scope note)
+        sp.Player['Game Options'][lenField] = length;
+        sp.Player['Race Conditions'][startField] = Number(ss.startTime ?? 720);
+        if (privField) {
+            sp.Player['Race Conditions'][privField] = !!(ss.privateSession ?? true);
+        }
+        sp.Player['Race Conditions'][rrField] = Number(ss.realRoadTimeScale ?? 0);
+    }
+
+    // Race start type — Race only.
+    // LMU enum (INFERRED — not present in template): 0=Standing, 1=Rolling, 2=FastRolling.
+    // We only ship 'rolling' and 'fast_rolling' from the renderer (no Standing UI).
+    const raceStartType = sessions.race?.startType ?? 'rolling';
+    sp.Player['Race Conditions'].RaceStartType = raceStartType === 'fast_rolling' ? 2 : 1;
+
+    // Tire warmers stays shared (top-level, written once).
     sp.Player['Game Options']['Tire Warmers'] = !!o.tireWarmers;
-    sp.Player['Race Conditions'].Practice1StartingTime = Number(practice.startTime ?? o.practiceStartingTime ?? 720);
-    sp.Player['Race Conditions'].PrivatePractice = !!(practice.privateSession ?? o.privatePractice ?? true);
-    sp.Player['Race Conditions'].RealRoadTimeScalePractice = Number(practice.realRoadTimeScale ?? o.realRoadTimeScale ?? 0);
     sp.Player['Race Conditions'].Weather = 4;          // scripted
     sp.Player['Race Conditions'].TimeScaledWeather = true;
     sp.Player['Race Conditions'].RaceTimeScale = Number(o.timeScale);
@@ -301,15 +331,15 @@ function composeSession({ presetJson, liveSelection, overrides }) {
         if (!block) continue;
         block.Road = block.Road || {};
         const sessKey = session.toLowerCase();
-        const ss = o.sessions?.[sessKey] || {};
-        block.Road.RealRoad = String(ss.startingGrip ?? o.startingGrip ?? 'preset:SATURATED.RRBIN');
-        block.Road.WaterDepth = Number(o.waterDepth);
+        const ss = sessions[sessKey] || {};
+        block.Road.RealRoad = String(ss.startingGrip ?? 'preset:SATURATED.RRBIN');
+        block.Road.WaterDepth = Number(o.waterDepth ?? -0.01);
         block.Road.LoadTemperaturesFromRealRoadFile = false;
 
         // For "custom" weather, also stamp the user-tuned values into every
         // weather slice. The binary blob still drives the actual game weather,
         // but slice values show in LMU's pre-session weather summary.
-        const sessWeatherPreset = ss.weatherPreset ?? o.weatherPreset ?? 'dry';
+        const sessWeatherPreset = ss.weatherPreset ?? 'dry';
         if (sessWeatherPreset === 'custom' && Array.isArray(ss.customWeather) && Array.isArray(block.Weather)) {
             for (let i = 0; i < block.Weather.length && i < ss.customWeather.length; i++) {
                 const slot = ss.customWeather[i];
@@ -320,9 +350,11 @@ function composeSession({ presetJson, liveSelection, overrides }) {
         }
     }
 
-    // Compute end ET from practice length (green flag at +5s).
-    const practiceLength = Number(practice.length ?? o.practiceLength ?? 60);
-    const practiceStartingTime = Number(practice.startTime ?? o.practiceStartingTime ?? 720);
+    // endET: end time of the longest enabled session. For multi-session weekends
+    // LMU computes its own session boundaries; this value is mostly informational
+    // for our save payload.
+    const practiceLength = Number(sessions.practice?.length ?? 60);
+    const practiceStartingTime = Number(sessions.practice?.startTime ?? 720);
     const endET = practiceLength * 60 + 5;
 
     return {

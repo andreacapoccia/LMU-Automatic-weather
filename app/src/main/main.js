@@ -297,8 +297,7 @@ ipcMain.handle('app:openLogsFolder', async () => {
 });
 
 ipcMain.handle('settings:resetAll', () => {
-    settings.resetAll();
-    return { ok: true };
+    return settings.resetAll() ? { ok: true } : { ok: false, error: 'Failed to delete settings file' };
 });
 
 ipcMain.handle('settings:get', (_e, key) => settings.get(key));

@@ -921,7 +921,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (resetBtn) resetBtn.addEventListener('click', async () => {
         if (!confirm('Reset all settings? This will not delete telemetry files.')) return;
         try {
-            await window.go.resetAllSettings();
+            const r = await window.go.resetAllSettings();
+            if (r?.ok === false) { logLine(`Reset failed: ${r.error}`, 'err'); return; }
             window.location.reload();
         } catch (e) {
             logLine(`Reset failed: ${e.message}`, 'err');

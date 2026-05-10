@@ -634,6 +634,75 @@ function renderAllSlotGrids() {
     ['practice', 'qualifying', 'race'].forEach(renderSlotGrid);
 }
 
+// ───────── Preset Management ─────────
+const PRESET_CAP = 50;
+
+async function loadPresets() {
+    const arr = await window.go.getSetting('customWeatherPresets');
+    return Array.isArray(arr) ? arr : [];
+}
+
+async function savePresets(arr) {
+    // FIFO trim if over cap (drops oldest first)
+    const trimmed = arr.length > PRESET_CAP ? arr.slice(arr.length - PRESET_CAP) : arr;
+    await window.go.setSetting('customWeatherPresets', trimmed);
+}
+
+function snapshotCurrentCustom() {
+    return {
+        practice:   state.overrides.sessions.practice.customWeather.map(s => ({ ...s })),
+        qualifying: state.overrides.sessions.qualifying.customWeather.map(s => ({ ...s })),
+        race:       state.overrides.sessions.race.customWeather.map(s => ({ ...s })),
+    };
+}
+
+async function onSavePreset() {
+    const name = prompt('Name this preset:');
+    if (!name) return;
+    const arr = await loadPresets();
+    arr.push({
+        id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `p-${Date.now()}`,
+        name,
+        createdAt: Date.now(),
+        config: snapshotCurrentCustom(),
+    });
+    await savePresets(arr);
+    logLine(`Saved preset "${name}"`, 'ok');
+}
+
+async function onLoadPreset() {
+    const arr = await loadPresets();
+    if (!arr.length) { alert('No presets saved yet.'); return; }
+    const labels = arr.map((p, i) => `${i + 1}. ${p.name} (${new Date(p.createdAt).toLocaleDateString()})`).join('\n');
+    const choice = prompt(`Load which preset?\n${labels}\n\nEnter number or 'd<num>' to delete:`);
+    if (!choice) return;
+    if (/^d\d+$/i.test(choice)) {
+        const i = Number(choice.slice(1)) - 1;
+        if (i >= 0 && i < arr.length) {
+            if (confirm(`Delete preset "${arr[i].name}"?`)) {
+                arr.splice(i, 1);
+                await savePresets(arr);
+                logLine(`Deleted preset.`, 'ok');
+            }
+        }
+        return;
+    }
+    const idx = Number(choice) - 1;
+    if (idx < 0 || idx >= arr.length) return;
+    const cfg = arr[idx].config;
+    if (cfg.practice)   state.overrides.sessions.practice.customWeather   = cfg.practice;
+    if (cfg.qualifying) state.overrides.sessions.qualifying.customWeather = cfg.qualifying;
+    if (cfg.race)       state.overrides.sessions.race.customWeather       = cfg.race;
+    renderAllSlotGrids();
+    updateSummary();
+    logLine(`Loaded preset "${arr[idx].name}"`, 'ok');
+}
+
+function bindPresetActions() {
+    document.querySelectorAll('[data-action="save-preset"]').forEach((b) => b.addEventListener('click', onSavePreset));
+    document.querySelectorAll('[data-action="load-preset"]').forEach((b) => b.addEventListener('click', onLoadPreset));
+}
+
 // ───────── Launch ─────────
 async function onLaunch() {
     const trackSelect = $('trackSelect');
@@ -846,6 +915,7 @@ document.addEventListener('DOMContentLoaded', () => {
     bindEnableToggles();
     bindWeatherPresetPills();
     renderAllSlotGrids();
+    bindPresetActions();
 
     // Track → layout cascade
     $('trackSelect').addEventListener('change', populateLayoutSelect);

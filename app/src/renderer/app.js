@@ -1733,7 +1733,11 @@ async function refreshFirstRunCard() {
     if (!card) return;
     const watchDir = await window.go.getSetting('watchDir') || '';
     const dismissed = await window.go.getSetting('firstRunDismissed') || false;
-    card.style.display = (!watchDir && !dismissed) ? '' : 'none';
+    const show = !watchDir && !dismissed;
+    card.style.display = show ? '' : 'none';
+    // Toggle the grid template so the firstrun row isn't reserved when hidden.
+    const tlm = document.getElementById('viewTelemetry');
+    if (tlm) tlm.classList.toggle('show-firstrun', show);
 }
 
 // ───────── Telemetry boot ─────────

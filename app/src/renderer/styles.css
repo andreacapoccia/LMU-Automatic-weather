@@ -1456,6 +1456,14 @@ input[type='range']::-webkit-slider-thumb:hover { transform: scale(1.1); }
   margin: 0 auto;
   width: 100%;
 }
+/* When the first-run card is hidden, collapse its grid row so the gap
+   between (empty) row 1 and row 2 doesn't add phantom top padding. */
+.tlm-layout:not(.show-firstrun) {
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'drop summary'
+    'sessions sessions';
+}
 .tlm-layout > .panel-sessions {
   display: flex;
   flex-direction: column;

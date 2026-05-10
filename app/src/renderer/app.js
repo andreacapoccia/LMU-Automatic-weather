@@ -925,6 +925,14 @@ document.addEventListener('DOMContentLoaded', () => {
     renderAllSlotGrids();
     bindPresetActions();
 
+    // Defaults panel — weekend-wide rules + tyres
+    bindRange('timeScale', 'timeScale', formatTimeScale);
+    bindRange('trackLimitsPoints', 'trackLimitsPoints', (v) => String(v));
+    bindSelect('flagRules', 'flagRules', Number);
+    bindSelect('trackLimitsRules', 'trackLimitsRules', Number);
+    bindSelect('mechanicalFailures', 'mechanicalFailures', Number);
+    bindCheckbox('tireWarmers', 'tireWarmers');
+
     // Track → layout cascade
     $('trackSelect').addEventListener('change', populateLayoutSelect);
     const layoutSel = $('layoutSelect');

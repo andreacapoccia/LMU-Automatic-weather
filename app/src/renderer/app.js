@@ -583,6 +583,27 @@ function renderSlot(slot, idx, editable) {
   </div>`;
 }
 
+// Effective slot values shown in the timeline. For 'dry' / 'overcast_rain'
+// presets the timeline displays the preset's fixed values for all 5 slots,
+// matching what the launch payload sends. The user's customWeather array
+// stays in state so they can switch back to Custom and recover their config.
+function effectiveSlotsFor(session) {
+    if (session.weatherPreset === 'overcast_rain') {
+        return Array.from({ length: 5 }, () => ({ sky: 8, rainChance: 100, temperature: 20 }));
+    }
+    if (session.weatherPreset === 'custom') {
+        return session.customWeather;
+    }
+    return Array.from({ length: 5 }, () => ({ sky: 0, rainChance: 0, temperature: 20 }));
+}
+
+// Length cap per session: Practice 6h, Qualifying 1h, Race 24h.
+function lengthMaxFor(sessionKey) {
+    if (sessionKey === 'race') return 1440;
+    if (sessionKey === 'qualifying') return 60;
+    return 360;
+}
+
 function buildSession(sk) {
     const s = state.overrides.sessions[sk];
     const meta = SESSION_META[sk];
@@ -607,7 +628,7 @@ function buildSession(sk) {
           <button class="wx-pill ${s.weatherPreset === 'custom' ? 'active' : ''}" data-preset="custom"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"/><path d="M9 15l3-3 3 3"/><path d="M5 4h14"/><path d="M5 8h14"/></svg>Custom</button>
         </div>
         <div class="wx-timeline">
-          ${s.customWeather.map((slot, i) => renderSlot(slot, i, isCustom)).join('')}
+          ${effectiveSlotsFor(s).map((slot, i) => renderSlot(slot, i, isCustom)).join('')}
         </div>
         <div class="wx-editor" data-editor>
           <div class="wxe-head">
@@ -649,7 +670,7 @@ function buildSession(sk) {
         <select class="select" data-field="startType"><option value="rolling" ${(s.startType || 'rolling') === 'rolling' ? 'selected' : ''}>Rolling</option><option value="fast_rolling" ${(s.startType || '') === 'fast_rolling' ? 'selected' : ''}>Fast Rolling</option></select></label>` : ''}
       <div class="slider-row">
         <div class="slider-label"><span class="lbl">Length</span><span class="val">${fmtLength(s.length)}</span></div>
-        <input type="range" min="1" max="${isRace ? 1440 : 360}" value="${s.length}" data-field="length" />
+        <input type="range" min="1" max="${lengthMaxFor(sk)}" value="${s.length}" data-field="length" />
       </div>
       <div class="slider-row">
         <div class="slider-label"><span class="lbl">Start time</span><span class="val">${fmtTime(s.startTime)}</span></div>
@@ -706,9 +727,21 @@ function bindSessionCards() {
             const sk = card.dataset.session;
             const preset = p.dataset.preset;
             state.overrides.sessions[sk].weatherPreset = preset;
-            const tl = card.querySelector('.wx-timeline');
+            // Re-render timeline so Dry/Wet show their fixed values, Custom shows user's slots.
             const isCustom = preset === 'custom';
-            tl.querySelectorAll('.wx-slot').forEach((s) => s.classList.toggle('disabled', !isCustom));
+            const tl = card.querySelector('.wx-timeline');
+            const slots = effectiveSlotsFor(state.overrides.sessions[sk]);
+            tl.innerHTML = slots.map((slot, i) => renderSlot(slot, i, isCustom)).join('');
+            // Close any open editor in this card (slots got replaced).
+            const ed = card.querySelector('.wx-editor');
+            if (ed) ed.classList.remove('open');
+            // Re-bind slot click handlers since we replaced the DOM.
+            tl.querySelectorAll('.wx-slot').forEach((slotEl) => {
+                slotEl.addEventListener('click', () => {
+                    if (slotEl.classList.contains('disabled')) return;
+                    openEditor(slotEl);
+                });
+            });
             setDirty(true);
             updateSummary();
         });

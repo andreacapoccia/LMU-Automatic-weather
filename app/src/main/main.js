@@ -25,10 +25,10 @@ let watcherProcess = null;
 
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 1422,
-        height: 868,
+        width: 1500,
+        height: 1024,
         minWidth: 1100,
-        minHeight: 860,
+        minHeight: 920,
         center: true,
         backgroundColor: '#0a0a0a',
         autoHideMenuBar: true,

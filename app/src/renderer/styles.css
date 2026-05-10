@@ -135,13 +135,16 @@ body { display: flex; flex-direction: column; }
     'sessions sessions'
     'launch launch';
   gap: 12px;
+  /* align-content: start prevents grid from distributing leftover vertical
+     space into the rows — keeps the gap between every row at exactly 12px. */
+  align-content: start;
   max-width: 1480px;
   margin: 0 auto;
   width: 100%;
 }
 
-.layout > .panel-track           { grid-area: track; align-self: start; }
-.layout > .panel-car             { grid-area: car;   align-self: start; }
+.layout > .panel-track           { grid-area: track; }
+.layout > .panel-car             { grid-area: car; }
 .layout > .panel-sessions-config { grid-area: sessions; }
 .layout > .panel-launch          { grid-area: launch; }
 

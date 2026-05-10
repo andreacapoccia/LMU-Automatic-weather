@@ -287,18 +287,20 @@ function composeSession({ presetJson, liveSelection, overrides }) {
     const sessions = o.sessions || {};
 
     // Resolve which captured blob to send per session. "custom" picks based on
-    // average rain across all 5 slots. weatherBlob is the 3-element array LMU
-    // expects: [Practice, Qualifying, Race].
+    // weatherBlob is the 3-element array LMU expects: [Practice, Qualifying, Race].
+    // For 'custom', pick by the FIRST slot only — that's what determines the
+    // starting weather the driver sees when the session loads. Using the avg
+    // across 5 slots caused sessions where slot 5 was rain to start raining
+    // immediately, even when slots 1-4 were dry.
     function pickBlobForSession(sess) {
         const wp = sess.weatherPreset ?? 'dry';
         if (wp === 'dry') return 'dry';
         if (wp === 'overcast_rain') return 'overcast_rain';
-        // custom — pick by avg rain across the 5 slots
-        const slots = sess.customWeather || [];
-        if (!slots.length) return 'dry';
-        const avgRain = slots.reduce((a, s) => a + Number(s.rainChance ?? 0), 0) / slots.length;
-        if (avgRain >= 75) return 'storm';
-        if (avgRain >= 30) return 'overcast_rain';
+        const slot0 = sess.customWeather?.[0] || {};
+        const rain = Number(slot0.rainChance ?? 0);
+        const sky = Number(slot0.sky ?? 0);
+        if (rain >= 75 || sky >= 9) return 'storm';
+        if (rain >= 30 || sky >= 5) return 'overcast_rain';
         return 'dry';
     }
 

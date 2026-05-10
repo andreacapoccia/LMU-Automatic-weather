@@ -92,13 +92,6 @@ function navStateLabel(nav) {
     return nav.replace(/^NAV_/, '').toLowerCase().replace(/_/g, ' ');
 }
 
-function formatTime(minutes) {
-    const m = ((minutes % 1440) + 1440) % 1440;
-    const h = Math.floor(m / 60);
-    const mm = String(m % 60).padStart(2, '0');
-    return `${String(h).padStart(2, '0')}:${mm}`;
-}
-
 function formatTimeScale(v) {
     const n = Number(v);
     if (n === 0) return 'None';
@@ -1218,30 +1211,6 @@ function initRulesModal() {
     if (rulesReset) rulesReset.addEventListener('click', () => writeRules(RULES_DEFAULTS));
 
     syncRulesUI();
-}
-
-// ───────── Old stubs (removed) ─────────
-function bindDataInput(el) {
-    const key = el.dataset.input;            // e.g. "practice_length"
-    if (!key) return;
-    const [sessKey, fieldKey] = key.split('_');
-    const out = document.querySelector(`[data-out="${key}"]`);
-    const update = () => {
-        let raw = el.type === 'checkbox' ? el.checked : el.value;
-        let v = el.type === 'range' ? Number(raw) : raw;
-        if (el.tagName === 'SELECT' && fieldKey === 'realRoadTimeScale') v = Number(raw);
-        state.overrides.sessions[sessKey][fieldKey] = v;
-        if (out) {
-            if (fieldKey === 'length')           out.textContent = formatLengthLabel(Number(raw));
-            else if (fieldKey === 'startTime')   out.textContent = formatTime(Number(raw));
-            else if (fieldKey === 'realRoadTimeScale') out.textContent = `${raw}×`;
-            else out.textContent = String(raw);
-        }
-        if (el.type === 'range') updateRangeFill(el);
-        updateSummary();
-    };
-    el.addEventListener(el.type === 'checkbox' ? 'change' : (el.type === 'range' ? 'input' : 'change'), update);
-    update();
 }
 
 // ───────── Launch ─────────

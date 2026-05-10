@@ -594,6 +594,46 @@ function bindWeatherPresetPills() {
     });
 }
 
+const SKY_OPTIONS = [
+    [0, 'Clear'], [1, 'Light clouds'], [2, 'Partially cloudy'], [3, 'Mostly cloudy'],
+    [4, 'Overcast'], [5, 'Cloudy & drizzle'], [6, 'Cloudy & light rain'],
+    [7, 'Overcast & light rain'], [8, 'Overcast & rain'], [9, 'Overcast & heavy rain'],
+    [10, 'Overcast & storm'],
+];
+
+function renderSlotGrid(sessKey) {
+    const grid = document.querySelector(`.custom-weather[data-custom-for="${sessKey}"] .slot-grid`);
+    if (!grid) return;
+    const slots = state.overrides.sessions[sessKey].customWeather;
+    grid.innerHTML = '';
+    for (let i = 0; i < 5; i++) {
+        const slot = slots[i] || { sky: 0, rainChance: 0, temperature: 22 };
+        const cell = document.createElement('div');
+        cell.className = 'slot-cell';
+        cell.innerHTML = `
+            <div class="slot-label">Slot ${i + 1}</div>
+            <select data-slot-field="sky" data-slot-index="${i}">
+                ${SKY_OPTIONS.map(([v, l]) => `<option value="${v}"${v === slot.sky ? ' selected' : ''}>${l}</option>`).join('')}
+            </select>
+            <input type="number" min="0" max="100" step="5" data-slot-field="rainChance" data-slot-index="${i}" value="${slot.rainChance}" placeholder="Rain %" />
+            <input type="number" min="-10" max="50" step="1" data-slot-field="temperature" data-slot-index="${i}" value="${slot.temperature}" placeholder="Temp °C" />
+        `;
+        cell.querySelectorAll('select, input').forEach((inp) => {
+            inp.addEventListener('change', () => {
+                const idx = Number(inp.dataset.slotIndex);
+                const field = inp.dataset.slotField;
+                state.overrides.sessions[sessKey].customWeather[idx][field] = Number(inp.value);
+                updateSummary();
+            });
+        });
+        grid.appendChild(cell);
+    }
+}
+
+function renderAllSlotGrids() {
+    ['practice', 'qualifying', 'race'].forEach(renderSlotGrid);
+}
+
 // ───────── Launch ─────────
 async function onLaunch() {
     const trackSelect = $('trackSelect');
@@ -805,6 +845,7 @@ document.addEventListener('DOMContentLoaded', () => {
     bindAllSessionInputs();
     bindEnableToggles();
     bindWeatherPresetPills();
+    renderAllSlotGrids();
 
     // Track → layout cascade
     $('trackSelect').addEventListener('change', populateLayoutSelect);

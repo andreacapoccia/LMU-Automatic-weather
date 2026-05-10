@@ -2139,6 +2139,9 @@ body[data-drama="hero"] .panel-launch::after {
   border-radius: var(--r-md);
   padding: 11px 12px; min-width: 0;
   transition: opacity .2s, filter .2s;
+  /* Reserve enough vertical room for the inline weather editor so opening
+     it doesn't grow the row and push the Launch panel off-screen. */
+  min-height: 640px;
 }
 .session-card[data-enabled="false"] { opacity: .55; }
 .session-card[data-enabled="false"] .session-body {

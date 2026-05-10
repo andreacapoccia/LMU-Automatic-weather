@@ -15,6 +15,14 @@ const TEMPLATE = require('./data/gosetups-template.json'); // GO Setups Dry Sess
 
 const WEATHER_PRESETS = ['dry', 'overcast_rain', 'storm'];
 
+// Slice values stamped into SessionPreset.Weather[*].Weather[i] for each preset.
+// 'dry' / 'overcast_rain' use the same fixed values across all 5 slots; 'custom'
+// uses the per-slot user input (handled inline in composeSession).
+const PRESET_SLICE_VALUES = {
+    dry:           { Sky: 0, RainChance: 0,   Temperature: 20 },
+    overcast_rain: { Sky: 8, RainChance: 100, Temperature: 20 },
+};
+
 // Defaults pulled from GO Setups Dry. These are the fallbacks used when the
 // renderer doesn't pass an override.
 const DEFAULT_OVERRIDES = {
@@ -251,17 +259,6 @@ async function loadGame(saveJson) {
 function composeSession({ presetJson, liveSelection, overrides }) {
     const o = { ...DEFAULT_OVERRIDES, ...(overrides || {}) };
 
-    // Resolve which captured blob to send. "custom" picks based on rain%.
-    let blobName;
-    const practiceWp = o.sessions?.practice?.weatherPreset ?? 'dry';
-    if (practiceWp === 'custom') {
-        const cw0 = o.sessions?.practice?.customWeather?.[0] || {};
-        blobName = pickBlobForCustomRain(Number(cw0.rainChance) || 0);
-    } else {
-        blobName = WEATHER_PRESETS.includes(practiceWp) ? practiceWp : 'dry';
-    }
-    const weatherBlob = WEATHER_BLOBS[blobName];
-
     // Deep-clone so we don't mutate the on-disk template.
     const sp = JSON.parse(JSON.stringify(TEMPLATE.SessionPreset));
 
@@ -288,6 +285,29 @@ function composeSession({ presetJson, liveSelection, overrides }) {
     //   - RealRoadTimeScalePractice/Qualifying/Race all verified.
     //   - RaceStartType is INFERRED (not present in template; written speculatively).
     const sessions = o.sessions || {};
+
+    // Resolve which captured blob to send per session. "custom" picks based on
+    // average rain across all 5 slots. weatherBlob is the 3-element array LMU
+    // expects: [Practice, Qualifying, Race].
+    function pickBlobForSession(sess) {
+        const wp = sess.weatherPreset ?? 'dry';
+        if (wp === 'dry') return 'dry';
+        if (wp === 'overcast_rain') return 'overcast_rain';
+        // custom — pick by avg rain across the 5 slots
+        const slots = sess.customWeather || [];
+        if (!slots.length) return 'dry';
+        const avgRain = slots.reduce((a, s) => a + Number(s.rainChance ?? 0), 0) / slots.length;
+        if (avgRain >= 75) return 'storm';
+        if (avgRain >= 30) return 'overcast_rain';
+        return 'dry';
+    }
+
+    const weatherBlob = [
+        WEATHER_BLOBS[pickBlobForSession(sessions.practice   || {})][0],
+        WEATHER_BLOBS[pickBlobForSession(sessions.qualifying || {})][1],
+        WEATHER_BLOBS[pickBlobForSession(sessions.race       || {})][2],
+    ];
+
     const SESSION_MAP = [
         // [stateKey, Game Options length field,  startTimeField,           privateField,        realRoadField]
         ['practice',   'practice length',           'Practice1StartingTime',   'PrivatePractice',   'RealRoadTimeScalePractice'],
@@ -336,16 +356,32 @@ function composeSession({ presetJson, liveSelection, overrides }) {
         block.Road.WaterDepth = Number(o.waterDepth ?? -0.01);
         block.Road.LoadTemperaturesFromRealRoadFile = false;
 
-        // For "custom" weather, also stamp the user-tuned values into every
-        // weather slice. The binary blob still drives the actual game weather,
-        // but slice values show in LMU's pre-session weather summary.
-        const sessWeatherPreset = ss.weatherPreset ?? 'dry';
-        if (sessWeatherPreset === 'custom' && Array.isArray(ss.customWeather) && Array.isArray(block.Weather)) {
-            for (let i = 0; i < block.Weather.length && i < ss.customWeather.length; i++) {
-                const slot = ss.customWeather[i];
-                if (slot.sky != null)         block.Weather[i].Sky         = Number(slot.sky);
-                if (slot.rainChance != null)  block.Weather[i].RainChance  = Number(slot.rainChance);
-                if (slot.temperature != null) block.Weather[i].Temperature = Number(slot.temperature);
+        // Slice stamping (B8 + C4): write Sky/RainChance/Temperature on every slot
+        // for every preset. Other slice fields (Humidity, Wind*) keep template defaults.
+        const wp = ss.weatherPreset ?? 'dry';
+        if (Array.isArray(block.Weather)) {
+            for (let i = 0; i < block.Weather.length; i++) {
+                let slotVals;
+                if (wp === 'custom') {
+                    const customSlot = ss.customWeather?.[i];
+                    if (!customSlot) continue;
+                    slotVals = {
+                        sky:         customSlot.sky,
+                        rainChance:  customSlot.rainChance,
+                        temperature: customSlot.temperature,
+                    };
+                } else {
+                    const preset = PRESET_SLICE_VALUES[wp];
+                    if (!preset) continue;
+                    slotVals = {
+                        sky:         preset.Sky,
+                        rainChance:  preset.RainChance,
+                        temperature: preset.Temperature,
+                    };
+                }
+                if (slotVals.sky != null)         block.Weather[i].Sky         = Number(slotVals.sky);
+                if (slotVals.rainChance != null)  block.Weather[i].RainChance  = Number(slotVals.rainChance);
+                if (slotVals.temperature != null) block.Weather[i].Temperature = Number(slotVals.temperature);
             }
         }
     }

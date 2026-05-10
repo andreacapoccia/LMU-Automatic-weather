@@ -28,7 +28,7 @@ const DEFAULT_OVERRIDES = {
     tireWarmers: true,
 
     // GO Setups standard session rules (overridable from UI):
-    timeScale: 0,                   // 0 = Normal real time, 1-60 = ×N
+    timeScale: 1,                   // 1 = Normal real time (was 0=None pre-v3.0.4)
     flagRules: 3,                   // 0=None 1=Penalties 2=Penalties+FCY 3=Full w/o DQ (per LMU's settings.json comment)
     trackLimitsRules: 1,            // 0=None 1=Default 2=Strict 3=Relaxed
     trackLimitsPoints: 5,           // 0..63

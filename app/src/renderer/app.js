@@ -451,39 +451,6 @@ function setAutoDetect(enabled) {
     updateSummary();
 }
 
-// ───────── Weather presets ─────────
-function selectPreset(name) {
-    state.overrides.sessions.practice.weatherPreset = name;
-    document.querySelectorAll('[data-preset]').forEach((c) => {
-        c.classList.toggle('active', c.dataset.preset === name);
-    });
-    const dryDetails = $('wxDetailsDry');
-    const rainDetails = $('wxDetailsRain');
-    const customWx = $('customWeather');
-    if (dryDetails) dryDetails.classList.toggle('hidden', name !== 'dry');
-    if (rainDetails) rainDetails.classList.toggle('hidden', name !== 'overcast_rain');
-    if (customWx) customWx.classList.toggle('hidden', name !== 'custom');
-
-    if (name === 'dry' || name === 'overcast_rain') {
-        applyGoSetupsDefaults();
-    }
-    updateSummary();
-}
-
-function applyGoSetupsDefaults() {
-    const defaults = { timeScale: 1, flagRules: 3, trackLimitsRules: 1, trackLimitsPoints: 5, mechanicalFailures: 1 };
-    Object.assign(state.overrides, defaults);
-    $('timeScale').value = String(defaults.timeScale);
-    $('timeScaleVal').textContent = formatTimeScale(defaults.timeScale);
-    updateRangeFill($('timeScale'));
-    $('flagRules').value = String(defaults.flagRules);
-    $('trackLimitsRules').value = String(defaults.trackLimitsRules);
-    $('trackLimitsPoints').value = String(defaults.trackLimitsPoints);
-    $('trackLimitsPointsVal').textContent = String(defaults.trackLimitsPoints);
-    updateRangeFill($('trackLimitsPoints'));
-    $('mechanicalFailures').value = String(defaults.mechanicalFailures);
-}
-
 // ───────── Launch summary ─────────
 function updateSummary() {
     const trackOpt = $('trackSelect').selectedOptions[0];
@@ -531,20 +498,6 @@ function bindRange(id, key, fmt) {
     update();
 }
 
-function bindCustomRange(id, key, fmt) {
-    const el = $(id);
-    if (!el) return;
-    const out = $(`${id}Val`);
-    const update = () => {
-        const v = Number(el.value);
-        state.overrides.sessions.practice.customWeather[0][key] = v;
-        if (out) out.textContent = fmt(v);
-        updateRangeFill(el);
-        updateSummary();
-    };
-    el.addEventListener('input', update);
-    update();
-}
 
 function bindCheckbox(id, key) {
     const el = $(id);
@@ -577,6 +530,68 @@ function bindToSession(id, sessionKey, fieldKey, parser) {
     };
     el.addEventListener(el.type === 'checkbox' || el.type === 'range' ? 'input' : 'change', update);
     update();
+}
+
+// ───────── Sessions panel (D2) ─────────
+function formatLengthLabel(min) {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m} min`;
+}
+
+function bindDataInput(el) {
+    const key = el.dataset.input;            // e.g. "practice_length"
+    if (!key) return;
+    const [sessKey, fieldKey] = key.split('_');
+    const out = document.querySelector(`[data-out="${key}"]`);
+    const update = () => {
+        let raw = el.type === 'checkbox' ? el.checked : el.value;
+        let v = el.type === 'range' ? Number(raw) : raw;
+        if (el.tagName === 'SELECT' && fieldKey === 'realRoadTimeScale') v = Number(raw);
+        state.overrides.sessions[sessKey][fieldKey] = v;
+        if (out) {
+            if (fieldKey === 'length')           out.textContent = formatLengthLabel(Number(raw));
+            else if (fieldKey === 'startTime')   out.textContent = formatTime(Number(raw));
+            else if (fieldKey === 'realRoadTimeScale') out.textContent = `${raw}×`;
+            else out.textContent = String(raw);
+        }
+        if (el.type === 'range') updateRangeFill(el);
+        updateSummary();
+    };
+    el.addEventListener(el.type === 'checkbox' ? 'change' : (el.type === 'range' ? 'input' : 'change'), update);
+    update();
+}
+
+function bindAllSessionInputs() {
+    document.querySelectorAll('[data-input]').forEach(bindDataInput);
+}
+
+function bindEnableToggles() {
+    ['practice', 'qualifying', 'race'].forEach((sk) => {
+        const cb = $(`sess${sk[0].toUpperCase() + sk.slice(1)}_enabled`);
+        if (!cb) return;
+        const card = document.querySelector(`.session-card[data-session="${sk}"]`);
+        const apply = () => {
+            state.overrides.sessions[sk].enabled = cb.checked;
+            if (card) card.dataset.enabled = String(cb.checked);
+        };
+        cb.addEventListener('change', apply);
+        apply();
+    });
+}
+
+function bindWeatherPresetPills() {
+    document.querySelectorAll('.weather-preset-row .wx-pill').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const sk = btn.dataset.session;
+            const preset = btn.dataset.preset;
+            state.overrides.sessions[sk].weatherPreset = preset;
+            btn.parentElement.querySelectorAll('.wx-pill').forEach(b => b.classList.toggle('active', b === btn));
+            const customPanel = document.querySelector(`.custom-weather[data-custom-for="${sk}"]`);
+            if (customPanel) customPanel.classList.toggle('hidden', preset !== 'custom');
+            updateSummary();
+        });
+    });
 }
 
 // ───────── Launch ─────────
@@ -773,43 +788,6 @@ document.addEventListener('click', (e) => {
     });
 });
 
-// ───────── Practice status tracking ─────────
-const PRACTICE_FIELD_IDS = [
-    'practiceLength', 'startTime', 'timeScale',
-    'startingGrip', 'realRoadTimeScale',
-    'flagRules', 'trackLimitsRules', 'trackLimitsPoints', 'mechanicalFailures',
-    'tireWarmers', 'privatePractice',
-];
-let practiceDefaults = {};
-
-function capturePracticeDefaults() {
-    PRACTICE_FIELD_IDS.forEach((id) => {
-        const el = $(id);
-        if (!el) return;
-        practiceDefaults[id] = el.type === 'checkbox' ? el.checked : el.value;
-    });
-}
-
-function isPracticeModified() {
-    return PRACTICE_FIELD_IDS.some((id) => {
-        const el = $(id);
-        if (!el) return false;
-        const v = el.type === 'checkbox' ? el.checked : el.value;
-        return v !== practiceDefaults[id];
-    });
-}
-
-function refreshPracticeStatus() {
-    const pill = $('practiceStatus');
-    if (!pill) return;
-    const modified = isPracticeModified();
-    pill.dataset.modified = String(modified);
-    const lbl = $('practiceStatusLabel');
-    if (lbl) lbl.textContent = modified ? 'Modified' : 'GO Setups defaults';
-    const rst = $('practiceReset');
-    if (rst) rst.hidden = !modified;
-}
-
 // ───────── Boot ─────────
 document.addEventListener('DOMContentLoaded', () => {
     // Populate About & Logs version row
@@ -823,36 +801,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch {}
     })();
 
-    // Session settings — bind ranges
-    bindToSession('practiceLength', 'practice', 'length', Number);
-    bindToSession('startTime', 'practice', 'startTime', Number);
-    bindToSession('realRoadTimeScale', 'practice', 'realRoadTimeScale', Number);
-    bindRange('timeScale', 'timeScale', formatTimeScale);
-    bindRange('trackLimitsPoints', 'trackLimitsPoints', (v) => String(v));
-
-    // Session settings — bind selects (numeric)
-    bindToSession('startingGrip', 'practice', 'startingGrip');
-    bindSelect('flagRules', 'flagRules', Number);
-    bindSelect('trackLimitsRules', 'trackLimitsRules', Number);
-    bindSelect('mechanicalFailures', 'mechanicalFailures', Number);
-
-    // Toggles (hidden checkboxes driven by rule pills)
-    bindCheckbox('tireWarmers', 'tireWarmers');
-    bindToSession('privatePractice', 'practice', 'privateSession');
-
-    // Custom weather sliders
-    bindCustomRange('cwTemp', 'temperature', (v) => `${v}°C`);
-    bindCustomRange('cwRain', 'rainChance', (v) => `${v}%`);
-    const cwSkyEl = $('cwSky');
-    if (cwSkyEl) cwSkyEl.addEventListener('change', (e) => {
-        state.overrides.sessions.practice.customWeather[0].sky = Number(e.target.value);
-        updateSummary();
-    });
-
-    // Weather preset buttons (wx-pills + weather-card)
-    document.querySelectorAll('[data-preset]').forEach((card) => {
-        card.addEventListener('click', () => selectPreset(card.dataset.preset));
-    });
+    // Sessions panel — per-session inputs, enable toggles, weather pills
+    bindAllSessionInputs();
+    bindEnableToggles();
+    bindWeatherPresetPills();
 
     // Track → layout cascade
     $('trackSelect').addEventListener('change', populateLayoutSelect);
@@ -876,57 +828,6 @@ document.addEventListener('DOMContentLoaded', () => {
         $('autoDetectLabel').textContent = `${state.cars.length} owned liveries.`;
     });
     setAutoDetect(true);
-
-    // Rule pills — toggle tyre warmers & private practice
-    document.querySelectorAll('.rule-pill').forEach((pill) => {
-        pill.addEventListener('click', () => {
-            const cb = pill.dataset.target ? $(pill.dataset.target) : null;
-            const on = !pill.classList.contains('is-on');
-            pill.classList.toggle('is-on', on);
-            pill.setAttribute('aria-pressed', String(on));
-            const state_ = pill.querySelector('.rp-state');
-            if (state_) state_.textContent = on ? 'ON' : 'OFF';
-            if (cb) { cb.checked = on; cb.dispatchEvent(new Event('change', { bubbles: true })); }
-            refreshPracticeStatus();
-        });
-    });
-
-    // Practice reset button
-    const practiceReset = $('practiceReset');
-    if (practiceReset) {
-        practiceReset.addEventListener('click', () => {
-            PRACTICE_FIELD_IDS.forEach((id) => {
-                const el = $(id);
-                if (!el) return;
-                if (el.type === 'checkbox') {
-                    el.checked = practiceDefaults[id];
-                } else {
-                    el.value = practiceDefaults[id];
-                }
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-            });
-            // Sync rule pills to their checkboxes
-            document.querySelectorAll('.rule-pill').forEach((pill) => {
-                const cb = pill.dataset.target ? $(pill.dataset.target) : null;
-                if (!cb) return;
-                const on = cb.checked;
-                pill.classList.toggle('is-on', on);
-                pill.setAttribute('aria-pressed', String(on));
-                const st = pill.querySelector('.rp-state');
-                if (st) st.textContent = on ? 'ON' : 'OFF';
-            });
-            refreshPracticeStatus();
-        });
-    }
-
-    // Watch practice fields for modifications
-    PRACTICE_FIELD_IDS.forEach((id) => {
-        const el = $(id);
-        if (!el) return;
-        el.addEventListener('input', refreshPracticeStatus);
-        el.addEventListener('change', refreshPracticeStatus);
-    });
 
     // Re-fetch cars when our window regains focus.
     window.addEventListener('focus', () => refreshLiveCars(true));
@@ -971,11 +872,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Enhance native selects with custom dropdowns
     enhanceSelects();
 
-    // Capture defaults after all binds have run
-    capturePracticeDefaults();
-    refreshPracticeStatus();
-
-    selectPreset('dry');
     loadInstall();
     pollStatus();
     setInterval(pollStatus, 5000);

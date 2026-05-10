@@ -1451,10 +1451,16 @@ input[type='range']::-webkit-slider-thumb:hover { transform: scale(1.1); }
     'drop summary'
     'sessions sessions';
   gap: 14px;
-  align-content: start;
+  /* Removed align-content: start so the 1fr sessions row expands to fill
+     the viewport. align-items defaults to stretch so the panel fills the row. */
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
+}
+.tlm-layout > .panel-sessions {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;  /* allow shrinking inside grid */
 }
 .tlm-layout > .panel-drop     { grid-area: drop; padding: 12px 16px; }
 .tlm-layout > .panel-summary  { grid-area: summary; padding: 12px 16px; }

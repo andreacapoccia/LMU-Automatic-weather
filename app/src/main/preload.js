@@ -35,4 +35,11 @@ contextBridge.exposeInMainWorld('go', {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
     openLogsFolder: () => ipcRenderer.invoke('app:openLogsFolder'),
     resetAllSettings: () => ipcRenderer.invoke('settings:resetAll'),
+    presetsList: () => ipcRenderer.invoke('presets:list'),
+    presetsSave: (name, config) => ipcRenderer.invoke('presets:save', { name, config }),
+    presetsLoad: (file) => ipcRenderer.invoke('presets:load', file),
+    presetsLoadFromPath: (fp) => ipcRenderer.invoke('presets:loadFromPath', fp),
+    presetsDelete: (file) => ipcRenderer.invoke('presets:delete', file),
+    presetsOpenFolder: () => ipcRenderer.invoke('presets:openFolder'),
+    presetsPickFile: () => ipcRenderer.invoke('presets:pickFile'),
 });

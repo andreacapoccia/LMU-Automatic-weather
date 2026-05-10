@@ -300,6 +300,108 @@ ipcMain.handle('settings:resetAll', () => {
     return settings.resetAll() ? { ok: true } : { ok: false, error: 'Failed to delete settings file' };
 });
 
+// ───────── Preset IPC ─────────
+
+function presetsDir() {
+    return path.join(app.getPath('userData'), 'presets');
+}
+
+function ensurePresetsDir() {
+    fs.mkdirSync(presetsDir(), { recursive: true });
+}
+
+function safePresetFilename(name) {
+    const cleaned = String(name || 'preset').replace(/[\\/:*?"<>|]+/g, '').trim() || 'preset';
+    return cleaned.endsWith('.json') ? cleaned : cleaned + '.json';
+}
+
+ipcMain.handle('presets:list', async () => {
+    try {
+        ensurePresetsDir();
+        const dir = presetsDir();
+        const files = fs.readdirSync(dir).filter(f => f.toLowerCase().endsWith('.json'));
+        const out = [];
+        for (const f of files) {
+            try {
+                const fp = path.join(dir, f);
+                const stat = fs.statSync(fp);
+                const raw = fs.readFileSync(fp, 'utf8');
+                const data = JSON.parse(raw);
+                out.push({
+                    file: f,
+                    path: fp,
+                    name: data.name || f.replace(/\.json$/i, ''),
+                    createdAt: data.createdAt || stat.mtimeMs,
+                });
+            } catch {}
+        }
+        out.sort((a, b) => b.createdAt - a.createdAt);
+        return out;
+    } catch (e) {
+        return [];
+    }
+});
+
+ipcMain.handle('presets:save', async (_e, { name, config }) => {
+    try {
+        ensurePresetsDir();
+        const file = safePresetFilename(name);
+        const fp = path.join(presetsDir(), file);
+        const payload = { name: String(name || file.replace(/\.json$/i, '')), createdAt: Date.now(), config };
+        fs.writeFileSync(fp, JSON.stringify(payload, null, 2), 'utf8');
+        return { ok: true, file, path: fp };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
+ipcMain.handle('presets:load', async (_e, file) => {
+    try {
+        const fp = path.join(presetsDir(), file);
+        const raw = fs.readFileSync(fp, 'utf8');
+        return { ok: true, data: JSON.parse(raw) };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
+ipcMain.handle('presets:loadFromPath', async (_e, fp) => {
+    try {
+        const raw = fs.readFileSync(fp, 'utf8');
+        return { ok: true, data: JSON.parse(raw) };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
+ipcMain.handle('presets:delete', async (_e, file) => {
+    try {
+        const fp = path.join(presetsDir(), file);
+        fs.unlinkSync(fp);
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+});
+
+ipcMain.handle('presets:openFolder', async () => {
+    ensurePresetsDir();
+    const err = await shell.openPath(presetsDir());
+    return err ? { ok: false, error: err } : { ok: true };
+});
+
+ipcMain.handle('presets:pickFile', async () => {
+    ensurePresetsDir();
+    const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Load preset',
+        defaultPath: presetsDir(),
+        properties: ['openFile'],
+        filters: [{ name: 'JSON preset', extensions: ['json'] }],
+    });
+    if (result.canceled || !result.filePaths?.length) return { canceled: true };
+    return { canceled: false, path: result.filePaths[0] };
+});
+
 ipcMain.handle('settings:get', (_e, key) => settings.get(key));
 ipcMain.handle('settings:set', (_e, key, value) => {
     settings.set(key, value);

@@ -122,7 +122,10 @@
         <button type="button" class="preset-icon-btn" id="presetSave" title="Save as new preset">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
         </button>
-        <button type="button" class="preset-icon-btn" id="presetImport" title="Import preset (.json)">
+        <button type="button" class="preset-icon-btn" id="presetOpenFolder" title="Open presets folder">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <button type="button" class="preset-icon-btn" id="presetImport" title="Load preset (.json)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         </button>
         <button type="button" class="preset-icon-btn" id="presetExport" title="Export current as .json">
@@ -257,8 +260,6 @@
     </div>
   </div>
 </div>
-
-<input type="file" id="presetFileInput" accept=".json,application/json" hidden />
 
 <!-- ═══════════════ TELEMETRY VIEW ═══════════════ -->
 <main class="tlm-layout view telemetry-view" id="viewTelemetry" role="tabpanel" aria-label="Telemetry" style="display:none;">

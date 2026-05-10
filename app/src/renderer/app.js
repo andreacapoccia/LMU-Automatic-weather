@@ -657,7 +657,6 @@ function buildSession(sk) {
             </div>
           </div>
           <div class="wxe-actions">
-            <button class="wxe-action" data-action="copy-prev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Copy previous</button>
             <button class="wxe-action" data-action="apply-forward">Apply to next slots<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
             <button class="wxe-action" data-action="apply-all">Apply to all slots</button>
             <button class="wxe-action primary" data-action="apply-all-sessions"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Apply to all sessions</button>
@@ -812,7 +811,7 @@ function bindSessionCards() {
             }
         });
 
-        // Action buttons (copy-prev, apply-forward, apply-all, apply-all-sessions)
+        // Action buttons (apply-forward, apply-all, apply-all-sessions)
         ed.querySelectorAll('.wxe-action').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const card = ed.closest('.session-card');
@@ -836,10 +835,7 @@ function bindSessionCards() {
                     }
                 }
 
-                if (action === 'copy-prev' && idx > 0) {
-                    sess.customWeather[idx] = { ...sess.customWeather[idx - 1] };
-                    openEditor(activeSlot);
-                } else if (action === 'apply-forward') {
+                if (action === 'apply-forward') {
                     for (let i = idx + 1; i < 5; i++) applySlotEl(sk, i);
                 } else if (action === 'apply-all') {
                     for (let i = 0; i < 5; i++) if (i !== idx) applySlotEl(sk, i);
@@ -925,28 +921,25 @@ function openEditor(slotEl) {
     editor.classList.add('open');
 }
 
-// ───────── Preset Management (IPC-backed) ─────────
-const PRESET_CAP = 50;
+// ───────── Preset Management (file-based IPC) ─────────
 
-async function loadUserPresets() {
-    const arr = await window.go.getSetting('customWeatherPresets');
-    return Array.isArray(arr) ? arr : [];
+function snapshotCurrentSessions() {
+    // Deep-clone the full sessions config so loading restores everything.
+    return JSON.parse(JSON.stringify(state.overrides.sessions));
 }
 
-async function saveUserPresets(arr) {
-    const trimmed = arr.length > PRESET_CAP ? arr.slice(0, PRESET_CAP) : arr;
-    await window.go.setSetting('customWeatherPresets', trimmed);
-}
-
-function snapshotCurrentWeather() {
-    const out = {};
-    Object.keys(state.overrides.sessions).forEach((sk) => {
-        out[sk] = state.overrides.sessions[sk].customWeather.map((s) => ({ ...s }));
+function applyPresetConfig(config) {
+    // config is state.overrides.sessions shape: { practice: {...}, qualifying: {...}, race: {...} }
+    Object.keys(config).forEach((sk) => {
+        if (state.overrides.sessions[sk]) {
+            state.overrides.sessions[sk] = JSON.parse(JSON.stringify(config[sk]));
+        }
     });
-    return out;
+    renderAllSessions();
+    updateSummary();
 }
 
-let activePresetId = null;
+let activePresetFile = null;
 let isDirty = false;
 
 function setDirty(d) {
@@ -956,52 +949,32 @@ function setDirty(d) {
 }
 
 function setActivePreset(p) {
-    activePresetId = p ? p.id : null;
+    activePresetFile = p ? (p.file || null) : null;
     const nameEl = $('presetName');
     if (nameEl) nameEl.textContent = p ? p.name : 'Custom';
     setDirty(false);
 }
 
-const BUILTIN_PRESETS = [
-    {
-        id: 'dry-all', name: 'Clear weekend', builtin: true,
-        weather: { practice: Array(5).fill(null).map(() => ({ sky: 0, rainChance: 0, temperature: 22 })), qualifying: Array(5).fill(null).map(() => ({ sky: 0, rainChance: 0, temperature: 22 })), race: Array(5).fill(null).map(() => ({ sky: 0, rainChance: 0, temperature: 22 })) },
-    },
-    {
-        id: 'wet-race', name: 'Wet race', builtin: true,
-        weather: { practice: Array(5).fill(null).map(() => ({ sky: 0, rainChance: 0, temperature: 22 })), qualifying: Array(5).fill(null).map(() => ({ sky: 4, rainChance: 30, temperature: 18 })), race: Array(5).fill(null).map((_, i) => ({ sky: 6 + Math.min(i, 2), rainChance: 50 + i * 10, temperature: 17 - i })) },
-    },
-];
-
 async function buildPresetMenu() {
     const presetMenu = $('presetMenu');
     if (!presetMenu) return;
-    const user = await loadUserPresets();
+    const list = await window.go.presetsList();
     let html = '';
-    if (user.length) {
-        html += '<div class="preset-menu-section">My presets</div>';
-        html += user.map((p) => presetItemHtml(p, false)).join('');
-        html += '<div class="preset-divider"></div>';
+    if (list.length) {
+        html += list.map((p) => presetItemHtml(p)).join('');
+    } else {
+        html += '<div class="preset-menu-empty">No saved presets</div>';
     }
-    html += '<div class="preset-menu-section">Built-in</div>';
-    html += BUILTIN_PRESETS.map((p) => presetItemHtml(p, true)).join('');
     presetMenu.innerHTML = html;
 
     presetMenu.querySelectorAll('.preset-item').forEach((el) => {
         el.addEventListener('click', async (e) => {
             if (e.target.closest('.pi-del')) return;
-            const id = el.dataset.id;
-            const allPresets = [...BUILTIN_PRESETS, ...(await loadUserPresets())];
-            const p = allPresets.find((x) => x.id === id);
-            if (p && p.weather) {
-                Object.keys(p.weather).forEach((sk) => {
-                    if (state.overrides.sessions[sk]) {
-                        state.overrides.sessions[sk].customWeather = p.weather[sk].map((s) => ({ ...s }));
-                    }
-                });
-                setActivePreset(p);
-                renderAllSessions();
-                updateSummary();
+            const file = el.dataset.file;
+            const r = await window.go.presetsLoad(file);
+            if (r.ok && r.data && r.data.config) {
+                applyPresetConfig(r.data.config);
+                setActivePreset({ file, name: r.data.name, createdAt: r.data.createdAt });
             }
             closePresetMenu();
         });
@@ -1009,19 +982,18 @@ async function buildPresetMenu() {
         if (delBtn) {
             delBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                const arr = (await loadUserPresets()).filter((x) => x.id !== el.dataset.id);
-                await saveUserPresets(arr);
-                buildPresetMenu();
+                const file = el.dataset.file;
+                const r = await window.go.presetsDelete(file);
+                if (r.ok) buildPresetMenu();
             });
         }
     });
 }
 
-function presetItemHtml(p, builtin) {
-    const active = p.id === activePresetId ? 'active' : '';
-    const meta = builtin ? '<span class="pi-meta">BUILT-IN</span>' : '';
-    const del = builtin ? '' : `<button class="pi-del" title="Delete"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`;
-    return `<div class="preset-item ${active}" data-id="${p.id}"><span class="pi-name">${p.name}</span>${meta}${del}</div>`;
+function presetItemHtml(p) {
+    const active = p.file === activePresetFile ? 'active' : '';
+    const del = `<button class="pi-del" title="Delete"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`;
+    return `<div class="preset-item ${active}" data-file="${p.file}"><span class="pi-name">${p.name}</span>${del}</div>`;
 }
 
 function openPresetMenu() {
@@ -1081,12 +1053,15 @@ function initPresetBar() {
             if (e.target.dataset.action === 'save') {
                 const name = saveInput ? saveInput.value.trim() : '';
                 if (!name) return;
-                const arr = await loadUserPresets();
-                const p = { id: 'u_' + Date.now(), name, weather: snapshotCurrentWeather() };
-                arr.unshift(p);
-                await saveUserPresets(arr);
-                setActivePreset(p);
-                saveModal.classList.remove('open');
+                const r = await window.go.presetsSave(name, snapshotCurrentSessions());
+                if (r.ok) {
+                    setActivePreset({ file: r.file, name, createdAt: Date.now() });
+                    saveModal.classList.remove('open');
+                    // Refresh menu if open
+                    if (presetMenu && presetMenu.classList.contains('open')) buildPresetMenu();
+                } else {
+                    alert('Failed to save preset: ' + r.error);
+                }
             }
         });
     }
@@ -1100,13 +1075,13 @@ function initPresetBar() {
         });
     }
 
-    // Export
+    // Export (download current config as .json — kept for quick sharing)
     const presetExport = $('presetExport');
     if (presetExport) {
         presetExport.addEventListener('click', () => {
             const nameEl = $('presetName');
             const name = (nameEl && nameEl.textContent) || 'Custom';
-            const data = { name, weather: snapshotCurrentWeather() };
+            const data = { name, config: snapshotCurrentSessions() };
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
@@ -1115,41 +1090,25 @@ function initPresetBar() {
         });
     }
 
-    // Import
-    const fileInput = $('presetFileInput');
+    // Open presets folder
+    const openFolderBtn = $('presetOpenFolder');
+    if (openFolderBtn) {
+        openFolderBtn.addEventListener('click', () => window.go.presetsOpenFolder());
+    }
+
+    // Load preset (formerly Import) — uses native file picker defaulting to presets folder
     const presetImport = $('presetImport');
-    if (presetImport && fileInput) {
-        presetImport.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', async (e) => {
-            const f = e.target.files[0];
-            if (!f) return;
-            const r = new FileReader();
-            r.onload = async () => {
-                try {
-                    const data = JSON.parse(r.result);
-                    if (data.weather) {
-                        const arr = await loadUserPresets();
-                        const p = { id: 'u_' + Date.now(), name: data.name || f.name.replace(/\.json$/, ''), weather: data.weather };
-                        arr.unshift(p);
-                        await saveUserPresets(arr);
-                        // Apply it immediately
-                        Object.keys(data.weather).forEach((sk) => {
-                            if (state.overrides.sessions[sk]) {
-                                state.overrides.sessions[sk].customWeather = data.weather[sk].map((s) => ({ ...s }));
-                            }
-                        });
-                        setActivePreset(p);
-                        renderAllSessions();
-                        updateSummary();
-                    } else {
-                        alert('Invalid preset file: missing weather data');
-                    }
-                } catch {
-                    alert('Invalid preset file');
-                }
-                fileInput.value = '';
-            };
-            r.readAsText(f);
+    if (presetImport) {
+        presetImport.addEventListener('click', async () => {
+            const picked = await window.go.presetsPickFile();
+            if (picked.canceled) return;
+            const loaded = await window.go.presetsLoadFromPath(picked.path);
+            if (loaded.ok && loaded.data && loaded.data.config) {
+                applyPresetConfig(loaded.data.config);
+                setActivePreset({ file: null, name: loaded.data.name || 'Loaded', createdAt: loaded.data.createdAt || Date.now() });
+            } else {
+                alert('Invalid preset file');
+            }
         });
     }
 

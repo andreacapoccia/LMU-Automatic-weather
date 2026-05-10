@@ -140,8 +140,8 @@ body { display: flex; flex-direction: column; }
   width: 100%;
 }
 
-.layout > .panel-track           { grid-area: track; }
-.layout > .panel-car             { grid-area: car; }
+.layout > .panel-track           { grid-area: track; align-self: start; }
+.layout > .panel-car             { grid-area: car;   align-self: start; }
 .layout > .panel-sessions-config { grid-area: sessions; }
 .layout > .panel-launch          { grid-area: launch; }
 

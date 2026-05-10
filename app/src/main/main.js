@@ -7,6 +7,8 @@ const launcher = require('./lmu-launcher');
 const scanner = require('./install-scanner');
 const settings = require('./settings');
 
+const PKG = require(path.join(app.getAppPath(), 'package.json'));
+
 let mainWindow = null;
 
 // In dev, the converter lives a few levels up alongside the app.
@@ -223,6 +225,11 @@ ipcMain.handle('dialog:pickFolder', async (_e, { title } = {}) => {
 ipcMain.handle('app:getDefaultWatchPath', () => {
     return path.join(app.getPath('documents'), 'Le Mans Ultimate', 'UserData', 'Telemetry');
 });
+
+ipcMain.handle('app:getVersion', () => ({
+    version: PKG.version,
+    buildDate: PKG.buildDate || 'unknown',
+}));
 
 ipcMain.handle('dialog:pickFile', async (_e, { title, filters } = {}) => {
     const result = await dialog.showOpenDialog(mainWindow, {

@@ -788,6 +788,17 @@ function refreshPracticeStatus() {
 
 // ───────── Boot ─────────
 document.addEventListener('DOMContentLoaded', () => {
+    // Populate About & Logs version row
+    (async () => {
+        try {
+            const v = await window.go.getVersion();
+            const ver = $('aboutVersion');
+            const upd = $('aboutUpdated');
+            if (ver) ver.textContent = v.version;
+            if (upd) upd.textContent = v.buildDate;
+        } catch {}
+    })();
+
     // Session settings — bind ranges
     bindRange('practiceLength', 'practiceLength', (v) => `${v} min`);
     bindRange('startTime', 'practiceStartingTime', formatTime);

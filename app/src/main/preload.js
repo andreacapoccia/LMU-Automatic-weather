@@ -32,4 +32,5 @@ contextBridge.exposeInMainWorld('go', {
     getSetting: (key) => ipcRenderer.invoke('settings:get', key),
     setSetting: (key, value) => ipcRenderer.invoke('settings:set', key, value),
     getDefaultWatchPath: () => ipcRenderer.invoke('app:getDefaultWatchPath'),
+    getVersion: () => ipcRenderer.invoke('app:getVersion'),
 });

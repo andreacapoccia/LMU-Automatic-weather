@@ -1442,7 +1442,7 @@ input[type='range']::-webkit-slider-thumb:hover { transform: scale(1.1); }
 .tlm-layout {
   position: relative; z-index: 1;
   flex: 1; overflow-y: auto;
-  padding: 10px 22px 18px;
+  padding: 16px;
   display: grid;
   grid-template-columns: 1.1fr 2.4fr;
   grid-template-rows: auto auto 1fr;
@@ -1450,10 +1450,9 @@ input[type='range']::-webkit-slider-thumb:hover { transform: scale(1.1); }
     'firstrun firstrun'
     'drop summary'
     'sessions sessions';
-  gap: 14px;
-  /* Removed align-content: start so the 1fr sessions row expands to fill
-     the viewport. align-items defaults to stretch so the panel fills the row. */
-  max-width: 1400px;
+  gap: 12px;
+  /* Match launcher (.layout) sizing so both tabs have identical gutters. */
+  max-width: 1480px;
   margin: 0 auto;
   width: 100%;
 }

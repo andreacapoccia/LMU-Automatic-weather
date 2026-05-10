@@ -58,14 +58,29 @@ The `settings` module needs a `resetAll()` method that clears all keys (or delet
 
 ### B5. Read Version + build date from `package.json`
 
+Add a custom `buildDate` field to `app/package.json` that gets bumped manually each release alongside `version` (same way as the visible `v3.0.X` in index.html). Reading file mtimes doesn't work — in packaged builds the mtime is the user's install time, not our release date.
+
+```jsonc
+// app/package.json
+{
+  "version": "3.0.4",
+  "buildDate": "2026-05-10",   // ← new, updated each release
+  ...
+}
+```
+
 In `main.js`, add:
 ```js
+const PKG = require(path.join(app.getAppPath(), 'package.json'));
 ipcMain.handle('app:getVersion', () => ({
-  version: app.getVersion(),
-  buildDate: fs.statSync(app.getAppPath() + '/package.json').mtime.toISOString().slice(0, 10),
+  version: PKG.version,
+  buildDate: PKG.buildDate || 'unknown',
 }));
 ```
+
 Expose in preload as `getVersion`. In renderer: on init, fetch and populate the Version + Updated rows. Remove the hardcoded "2.0.4 (build 318)" and "2025-04-29".
+
+Also delete the "Channel: stable" row — it's hardcoded and conveys nothing useful. (Implementation note: confirm with user; if they want to keep it, leave it for now.)
 
 ### B6. Track layout naming overrides
 
@@ -136,38 +151,29 @@ The spec assumes one of these outcomes; both implementations are described in Bu
 
 ### C1. Data model
 
+Per-session weather state lives inside each session in D1's `sessions` object:
+
 ```ts
-state.overrides.customWeather = {
-  practice:   [Slot, Slot, Slot, Slot, Slot],
-  qualifying: [Slot, Slot, Slot, Slot, Slot],
-  race:       [Slot, Slot, Slot, Slot, Slot],
+state.overrides.sessions = {
+  practice:   { …D1-fields…, weatherPreset: 'dry'|'overcast_rain'|'custom', customWeather: Slot[5] },
+  qualifying: { …D1-fields…, weatherPreset: 'dry'|'overcast_rain'|'custom', customWeather: Slot[5] },
+  race:       { …D1-fields…, weatherPreset: 'dry'|'overcast_rain'|'custom', customWeather: Slot[5] },
 };
 type Slot = { sky: 0..10, rainChance: 0..100, temperature: number };
 ```
 
-Defaults on first init: every slot = `{ sky: 0, rainChance: 0, temperature: 22 }`.
+`customWeather` is always a 5-slot array; only consulted when `weatherPreset === 'custom'`. Defaults on first init: every slot = `{ sky: 0, rainChance: 0, temperature: 22 }`.
 
-### C2. UI structure (HTML in-house)
+### C2. UI placement
 
-Replace the existing single Custom weather panel (sliders for sky/rain/temp) with a sub-tabbed panel:
+The Custom 5-slot grid lives **inside each session sub-card** (see D2 mockup) and is shown only when that session's `weatherPreset === 'custom'`. There is **no standalone Custom weather card** — the legacy Card 03 from the v3.0.3 launcher is removed entirely.
 
-```
-┌─ Custom weather ─────────────────────────────────────────────┐
-│ [Practice] [Qualifying] [Race]      [Save preset…] [Load…]   │
-│                                                              │
-│ ┌──Slot 1──┬──Slot 2──┬──Slot 3──┬──Slot 4──┬──Slot 5──┐   │
-│ │ Sky:▾    │ Sky:▾    │ Sky:▾    │ Sky:▾    │ Sky:▾    │   │
-│ │ Rain: 0% │ Rain: 0% │ Rain: 0% │ Rain: 0% │ Rain: 0% │   │
-│ │ Temp:22° │ Temp:22° │ Temp:22° │ Temp:22° │ Temp:22° │   │
-│ └──────────┴──────────┴──────────┴──────────┴──────────┘   │
-└──────────────────────────────────────────────────────────────┘
-```
+Each slot cell:
+- Sky `<select>` with the 11 options from Bucket A's cwSky fix (`value="0..10"`)
+- Rain chance number input (0..100, step 5)
+- Temperature number input (-10..50, step 1)
 
-The session sub-tabs (Practice/Qualifying/Race) switch which 5-column grid is shown. Each cell is a small card with a sky `<select>`, a rain-chance number input, and a temperature number input. Save/Load buttons in the header act on the currently-displayed session.
-
-Slot column widths equal. Reuse the existing `.field` and `.s-input` styling. Sky `<select>` reuses the 11-option list from Bucket A's cwSky fix (with `value="0..10"` attributes).
-
-The card visibility toggles with `weatherPreset === 'custom'` exactly as today.
+Reuse `.field` and `.s-input` styling.
 
 ### C3. Save/load presets
 
@@ -187,80 +193,118 @@ customWeatherPresets: Array<{
 
 Cap at 50 presets (FIFO trim on save).
 
-**Save flow.** Click "Save preset…" → `prompt('Name this preset:')` → on OK, push to settings, refresh dropdown.
+**Save flow.** Click "Save preset…" → `prompt('Name this preset:')` → on OK, snapshot `{ practice: sessions.practice.customWeather, qualifying: sessions.qualifying.customWeather, race: sessions.race.customWeather }` and push to settings.
 
-**Load flow.** Click "Load…" → modal/dropdown listing presets by name + date → on select, replace `state.overrides.customWeather` with the preset's config and re-render the slot grid.
+**Load flow.** Click "Load…" → small dropdown listing presets by name + date → on select, write each session's `customWeather` from the preset's `config[session]` and re-render the visible slot grid (only the currently-displayed session needs immediate re-render; others just update state).
 
-**Delete flow.** Each preset row has an X button. Confirm before delete.
+**Delete flow.** Each preset row in the dropdown has an X button. Confirm before delete.
 
 For v1, no rename, no export/import. Names are unique-by-coincidence (we don't dedup).
 
-### C4. Backend behavior — slice path
+### C4. Backend behavior — slice stamping (always runs)
 
-In `lmu-launcher.composeSession`, when `weatherPreset === 'custom'`:
-- For each session in [Practice, Qualifying, Race]:
-  - For i in 0..4:
-    - `block.Weather[i].Sky = customWeather[session][i].sky`
-    - `block.Weather[i].RainChance = customWeather[session][i].rainChance`
-    - `block.Weather[i].Temperature = customWeather[session][i].temperature`
-    - Leave Humidity, WindSpeed, WindDirection at template defaults.
+In `lmu-launcher.composeSession`, for each session in [Practice, Qualifying, Race]:
+- Look up the session's `weatherPreset`.
+- For preset `'dry'`: stamp slices with all 5 slots = `{ sky: 0, rainChance: 0, temperature: 20 }` (matches "GO Setups Dry").
+- For preset `'overcast_rain'`: stamp slices with all 5 slots = `{ sky: 8, rainChance: 100, temperature: 20 }` (matches B8 spec).
+- For preset `'custom'`: stamp slices from `sessions[X].customWeather[i]` for i=0..4.
 
-(This already happens partially today for the legacy single-set custom; we extend to per-session 5-slot.)
+In all cases write Sky/RainChance/Temperature into `block.Weather[i]`; leave Humidity/WindSpeed/WindDirection at template defaults.
 
-### C5. Backend behavior — blob path (conditional on investigation)
+This is the always-on path. Whether actual game weather follows the slices is the §2 investigation question — see C5.
 
-**If slices drive weather (preferred outcome):** No blob handling needed. Set `Player['Race Conditions'].Weather` to whatever mode the investigation determined uses slices (likely 0 or 1). Skip the binary blob entirely — write `save.Weather = []` or omit. Custom weather works fully.
+### C5. Backend behavior — binary blob (conditional on investigation)
 
-**If blob drives weather (fallback):** Pick the closest static blob per session by averaging the 5 slots' RainChance:
+**If §2 investigation shows slices drive weather:** Skip the binary blob. Set `Player['Race Conditions'].Weather` to whatever mode uses slices (likely 0=real-time). Set `save.Weather = []` (or whatever LMU accepts as "no scripted weather"). Custom weather is fully achievable.
+
+**If §2 investigation shows blob drives weather:** Pick the closest static blob per session by averaging the 5 slots' RainChance.
+
 ```js
-function pickBlobForSession(slots) {
-  const avgRain = slots.reduce((a, s) => a + s.rainChance, 0) / 5;
+function pickBlobForSession(session) {
+  const sw = session.weatherPreset;
+  if (sw === 'dry') return 'dry';
+  if (sw === 'overcast_rain') return 'overcast_rain';
+  // custom
+  const avgRain = session.customWeather.reduce((a, s) => a + s.rainChance, 0) / 5;
   if (avgRain >= 75) return 'storm';
   if (avgRain >= 30) return 'overcast_rain';
   return 'dry';
 }
 const weatherBlob = [
-  WEATHER_BLOBS[pickBlobForSession(customWeather.practice)][0],   // index 0 = practice
-  WEATHER_BLOBS[pickBlobForSession(customWeather.qualifying)][1], // index 1 = qual
-  WEATHER_BLOBS[pickBlobForSession(customWeather.race)][2],       // index 2 = race
+  WEATHER_BLOBS[pickBlobForSession(sessions.practice)][0],   // index 0 = practice
+  WEATHER_BLOBS[pickBlobForSession(sessions.qualifying)][1], // index 1 = qual
+  WEATHER_BLOBS[pickBlobForSession(sessions.race)][2],       // index 2 = race
 ];
 ```
-Slice values still get stamped (per C4) so the forecast UI matches. Document in the UI that actual weather is approximate.
+
+Slice values still get stamped (per C4) so the forecast UI matches user intent. Document in the UI that actual weather is approximate when in this mode.
 
 ## Bucket D — Race weekend
 
 ### D1. Data model
 
 ```ts
+type Slot = { sky: 0..10, rainChance: 0..100, temperature: number };
+type SessionConfig = {
+  enabled: boolean,
+  length: number,           // minutes
+  startTime: number,        // minutes from midnight (0..1439)
+  privateSession?: boolean, // Practice + Qual only
+  startType?: 'rolling' | 'fast_rolling',  // Race only
+  startingGrip: string,     // 'preset:SATURATED.RRBIN' etc
+  realRoadTimeScale: number,// 0..15
+  weatherPreset: 'dry' | 'overcast_rain' | 'custom',
+  customWeather: Slot[5],   // consulted only when weatherPreset === 'custom'
+};
+
 state.overrides.sessions = {
-  practice:   { enabled: true,  length: 360, startTime: 720,  privateSession: true,  startingGrip, realRoadTimeScale, weatherPreset, customWeatherIndex },
-  qualifying: { enabled: false, length: 20,  startTime: 900,  privateSession: true,  startingGrip, realRoadTimeScale, weatherPreset, customWeatherIndex },
-  race:       { enabled: false, length: 240, startTime: 780,  startType: 'rolling', startingGrip, realRoadTimeScale, weatherPreset },
+  practice:   SessionConfig,
+  qualifying: SessionConfig,
+  race:       SessionConfig,
 };
 ```
 
-`length` in minutes. `startTime` in minutes-from-midnight. `startType` ∈ `'rolling' | 'fast_rolling'`.
+Defaults on first init:
+- practice:   `{ enabled: true,  length: 360, startTime: 720, privateSession: true, startingGrip: 'preset:SATURATED.RRBIN', realRoadTimeScale: 0, weatherPreset: 'dry', customWeather: <5 default slots> }`
+- qualifying: `{ enabled: false, length: 20,  startTime: 900, privateSession: true, startingGrip: 'preset:HEAVY.RRBIN',     realRoadTimeScale: 0, weatherPreset: 'dry', customWeather: <5 default slots> }`
+- race:       `{ enabled: false, length: 240, startTime: 780, startType: 'rolling',  startingGrip: 'preset:SATURATED.RRBIN', realRoadTimeScale: 0, weatherPreset: 'dry', customWeather: <5 default slots> }`
 
-Limits: practice 1..360 (6h), qualifying 1..60, race 1..1440 (24h).
+Length limits: practice 1..360 (6h), qualifying 1..60, race 1..1440 (24h). Enforced in renderer via slider `min`/`max`; main process doesn't re-validate.
 
-`weatherPreset` per session: `'dry' | 'overcast_rain' | 'custom'`. Custom uses the per-session slot array from C1.
+The legacy flat fields `state.overrides.weatherPreset`, `state.overrides.customWeather`, `state.overrides.practiceLength`, etc. are removed in this refactor; everything routes through `sessions[X]`.
 
 ### D2. UI restructure
 
-The existing "Practice settings" card (Card 04) becomes "Sessions". Inside, three collapsible sub-cards in vertical stack: Practice / Qualifying / Race. Each has:
-- Enable toggle (header right)
-- Length slider with hr+min split
-- Start time slider (24h clock)
-- Privacy toggle (Practice + Qual only)
-- Starting grip select
-- RealRoad scale slider
-- (Race only) Start type select with two options: Rolling, Fast Rolling
+The existing Card 03 (Weather Preset) and Card 04 (Practice settings) merge into a single Card 03 ("Sessions"). Inside, three collapsible sub-cards in vertical stack: **Practice / Qualifying / Race**. Each sub-card is self-contained with its own weather AND rules:
 
-Disabled session cards collapse to header-only.
+```
+┌─ Practice ────────────────────────────  [Enabled ●] ──┐
+│                                                       │
+│ Weather: [Dry] [Wet] [Custom]                         │
+│   ↳ when Custom selected, inline 5-slot grid:         │
+│     ┌──Slot 1──┬──Slot 2──┬──Slot 3──┬──Slot 4──┬──Slot 5──┐
+│     │ Sky:▾    │ Sky:▾    │ Sky:▾    │ Sky:▾    │ Sky:▾    │
+│     │ Rain: 0% │ Rain: 0% │ Rain: 0% │ Rain: 0% │ Rain: 0% │
+│     │ Temp:22° │ Temp:22° │ Temp:22° │ Temp:22° │ Temp:22° │
+│     └──────────┴──────────┴──────────┴──────────┴──────────┘
+│     [Save preset…] [Load preset…]                     │
+│                                                       │
+│ Length:    [────●──────] 6h 0m                        │
+│ Start:     [──●────────] 12:00                        │
+│ Privacy:   [● Private]                                │
+│ Grip:      [Saturated ▾]                              │
+│ RealRoad:  [────●──] 0× scale                         │
+└───────────────────────────────────────────────────────┘
+```
 
-The Card 03 (Weather Preset) selection becomes per-session: a small "Apply to:" segmented control above the preset cards lets user choose Practice/Qualifying/Race/All. "All" applies the same preset to all enabled sessions.
+Race sub-card additionally has a **Start type** select (Rolling / Fast Rolling) above Length. Race-only differences:
+- No Privacy toggle (always solo per D4)
+- Length slider goes 1m..24h (vs 6h for Practice, 60m for Qual)
+- Adds Start type select
 
-For Custom: the C2 sub-tabs duplicate this — clicking "Practice" tab in Custom = editing practice-session weather slots.
+Disabled session cards collapse to header-only (no body).
+
+Save/Load preset buttons (in the Custom inline grid) act on the **whole preset** (snapshot of all 3 sessions' customWeather arrays) per C3 — not just the displayed session. The button placement inside one session is for proximity to where the user just edited; the action is global.
 
 ### D3. Backend behavior
 
@@ -278,7 +322,9 @@ For Custom: the C2 sub-tabs duplicate this — clicking "Practice" tab in Custom
 - `Player['Game Options']['race length']` (new)
 - `Player['Race Conditions'].RaceStartType` (new — `0=Standing, 1=Rolling, 2=FastRolling` to verify)
 
-Disabled sessions: set their `length = 0` and `enabled` flags off (need to verify which LMU field controls "skip session entirely").
+**Disabled sessions.** LMU's settings.json has per-session enable booleans (visible as the `Practice`, `Qualifying`, `Race` toggles in LMU's own UI — see screenshots 4/5/6). Implementation step: dump LMU's settings.json after toggling each session off in LMU's UI to identify the exact field name (likely `Player['Game Options']['Run Practice']` or similar). Set the matching field to `false` for any session with `enabled === false`. Don't rely on `length = 0` alone — LMU may still show a 0-second session in the pre-race summary, which would confuse drivers.
+
+If we can't find the toggle field quickly during implementation, fall back to: set `length = 1` (1-minute session) for disabled sessions and document the caveat in the UI.
 
 ### D4. Solo-only
 
@@ -306,12 +352,39 @@ app/src/main/lmu-launcher.js      — slice-stamping for wet+custom, per-session
 
 ## Verification approach
 
-Manual smoke test for each bucket. Reuses the v3.0.4 build the user already has installed:
+Manual smoke test against a fresh `app/dist/GO-LMU-Launcher-3.0.4-win-x64.zip` install. Each bullet is a verifiable goal:
 
-- B: open Settings drawer, confirm Check-for-updates / License rows are gone, version reads "3.0.3", click Open logs (folder opens), click Reset (confirms then resets), check track names in Lemans/Monza/Paul Ricard groups.
-- B7/B8: launch with Saturated grip → verify in LMU's weather/track display. Launch with Wet preset → verify forecast shows rain in all 5 slots.
-- Investigation: per the procedure in §2.
-- C: build a custom 5-slot weather pattern, save as preset, reload app, load preset, verify state restores. Launch and verify slices show in LMU.
-- D: enable all 3 sessions, launch, verify LMU shows full race weekend in pre-session screen.
+**Bucket B**
+- B1: open Settings → About & logs. Expect: no "Check for updates" row exists.
+- B2: same panel. Expect: no "License" row exists.
+- B3: click "Open logs folder". Expect: Windows Explorer opens at `<userData>/logs/` (folder may be empty).
+- B4: click "Reset…", confirm dialog, click OK. Expect: app reloads; any saved settings (e.g. watch path, motec exe) are gone.
+- B5: same panel. Expect: Version row reads `3.0.4`, Updated row reads `2026-05-10`.
+- B6: open Card 01 (Track), look at Le Mans / Monza / Paul Ricard layout dropdowns. Expect: no "Bugatti", "Grande Anello", or "Long (1A)" text — replaced per B6 list.
+- B7: select Saturated grip → launch a session. In LMU's pre-session weather panel, expect: track surface shows wet/saturated. Repeat with Green → expect: dry track. (The pre-session weather panel labels the surface state.)
+- B8: select Wet preset → launch. Expect: pre-session forecast shows rain icon in all 5 slots, temp 20°, no sun icons.
 
-No automated tests added by this spec. Renderer has no test infrastructure today.
+**Investigation (§2)**
+- Outcome reported back: `actual_weather: rain | sun | mixed`. Implementation plan branches on this.
+
+**Bucket C**
+- C1+C2: select Custom on Practice card. Expect: 5-slot grid appears with sky/rain/temp inputs. Editing any cell updates state (verified by launching and seeing the change in LMU).
+- C3 save: configure custom slots, click Save preset, name it "test1". Expect: preset saved to settings store (verifiable by reading `<userData>/settings.json`).
+- C3 load: reload app. Custom slots reset to defaults. Click Load → "test1". Expect: slots populate with saved values.
+- C3 delete: click X on "test1". Confirm. Expect: preset removed from list and settings store.
+- C4 stamping: launch with each preset (dry/wet/custom). Expect: in-game weather panel matches the stamped slice values.
+- C5 (only if blob fallback applies): edit Custom slots to all-rain (rainChance=100). Launch. Expect: storm blob is selected (verified via the saved request JSON in `~/Desktop/GO-LMU-debug/`).
+
+**Bucket D**
+- D2 enable: enable all 3 session sub-cards. Launch. Expect: LMU's session list shows Practice → Qualifying → Race in order with the configured lengths.
+- D2 disable: disable Qualifying. Launch. Expect: LMU jumps Practice → Race, no Qualifying session shown.
+- D2 race-only: enable Race, set start type = Fast Rolling. Launch. Expect: LMU race start screen confirms "Fast Rolling" start.
+- D2 length limits: drag Practice slider to max. Expect: stops at 6h. Same for Qual at 60m, Race at 24h.
+
+No automated tests added by this spec. Renderer has no test infrastructure today; fixing that is its own bucket of work.
+
+## Open UX considerations (not blockers)
+
+- **No "Apply weather to all sessions" shortcut.** With the per-session weather model, setting Wet across Practice + Qualifying + Race requires 3 clicks. If drivers find this annoying we can add a small "Copy weather to all enabled sessions" link inside each session card in v3.0.5.
+- **No preset-rename or export.** Save/load presets are minimum-viable. If usage grows we'd add rename and JSON export/import in a later bucket.
+- **Disabled-session field name is research-pending.** See D3 fallback.

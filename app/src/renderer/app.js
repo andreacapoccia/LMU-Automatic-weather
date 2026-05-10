@@ -1,11 +1,21 @@
 // ───────── State ─────────
-const GO_SETUPS_DEFAULTS = {
-    timeScale: 1,           // Normal (real time) — LMU enum: 0=None, 1=Normal, 2=×2
-    flagRules: 3,           // Full w/o DQ
-    trackLimitsRules: 1,    // Default
-    trackLimitsPoints: 5,
-    mechanicalFailures: 1,  // Normal
-};
+function defaultSlots() {
+    return Array.from({ length: 5 }, () => ({ sky: 0, rainChance: 0, temperature: 22 }));
+}
+
+function defaultSession(overrides) {
+    return {
+        enabled: false,
+        length: 60,
+        startTime: 720,
+        privateSession: true,
+        startingGrip: 'preset:SATURATED.RRBIN',
+        realRoadTimeScale: 0,
+        weatherPreset: 'dry',
+        customWeather: defaultSlots(),
+        ...overrides,
+    };
+}
 
 const state = {
     install: null,
@@ -16,23 +26,21 @@ const state = {
     // folder → { locationName, layouts: Array<track> }
     trackGroups: {},
     overrides: {
-        weatherPreset: 'dry',
-        practiceLength: 360,
-        practiceStartingTime: 720,
-        privatePractice: true,
-        startingGrip: 'preset:SATURATED.RRBIN',
+        // Shared (non-session) values — main process DEFAULT_OVERRIDES handles
+        // the rest; UI for these is removed in Task 7.
         waterDepth: -0.01,
-        realRoadTimeScale: 0,
         tireWarmers: true,
-        ...GO_SETUPS_DEFAULTS,
+        timeScale: 1,                   // Normal real time
+        flagRules: 3,                   // Full w/o DQ
+        trackLimitsRules: 1,            // Default
+        trackLimitsPoints: 5,
+        mechanicalFailures: 1,          // Normal
         vehicleString: null,
-        customWeather: {
-            sky: 0,
-            rainChance: 0,
-            temperature: 22,
-            humidity: 50,
-            windSpeed: 0,
-            windDirection: 0,
+        // Per-session config — Practice enabled by default for back-compat
+        sessions: {
+            practice:   defaultSession({ enabled: true,  length: 360, startTime: 720, startingGrip: 'preset:SATURATED.RRBIN' }),
+            qualifying: defaultSession({ enabled: false, length: 20,  startTime: 900, startingGrip: 'preset:HEAVY.RRBIN' }),
+            race:       defaultSession({ enabled: false, length: 240, startTime: 780, startingGrip: 'preset:SATURATED.RRBIN', startType: 'rolling', privateSession: false }),
         },
     },
 };
@@ -445,7 +453,7 @@ function setAutoDetect(enabled) {
 
 // ───────── Weather presets ─────────
 function selectPreset(name) {
-    state.overrides.weatherPreset = name;
+    state.overrides.sessions.practice.weatherPreset = name;
     document.querySelectorAll('[data-preset]').forEach((c) => {
         c.classList.toggle('active', c.dataset.preset === name);
     });
@@ -463,16 +471,17 @@ function selectPreset(name) {
 }
 
 function applyGoSetupsDefaults() {
-    Object.assign(state.overrides, GO_SETUPS_DEFAULTS);
-    $('timeScale').value = String(GO_SETUPS_DEFAULTS.timeScale);
-    $('timeScaleVal').textContent = formatTimeScale(GO_SETUPS_DEFAULTS.timeScale);
+    const defaults = { timeScale: 1, flagRules: 3, trackLimitsRules: 1, trackLimitsPoints: 5, mechanicalFailures: 1 };
+    Object.assign(state.overrides, defaults);
+    $('timeScale').value = String(defaults.timeScale);
+    $('timeScaleVal').textContent = formatTimeScale(defaults.timeScale);
     updateRangeFill($('timeScale'));
-    $('flagRules').value = String(GO_SETUPS_DEFAULTS.flagRules);
-    $('trackLimitsRules').value = String(GO_SETUPS_DEFAULTS.trackLimitsRules);
-    $('trackLimitsPoints').value = String(GO_SETUPS_DEFAULTS.trackLimitsPoints);
-    $('trackLimitsPointsVal').textContent = String(GO_SETUPS_DEFAULTS.trackLimitsPoints);
+    $('flagRules').value = String(defaults.flagRules);
+    $('trackLimitsRules').value = String(defaults.trackLimitsRules);
+    $('trackLimitsPoints').value = String(defaults.trackLimitsPoints);
+    $('trackLimitsPointsVal').textContent = String(defaults.trackLimitsPoints);
     updateRangeFill($('trackLimitsPoints'));
-    $('mechanicalFailures').value = String(GO_SETUPS_DEFAULTS.mechanicalFailures);
+    $('mechanicalFailures').value = String(defaults.mechanicalFailures);
 }
 
 // ───────── Launch summary ─────────
@@ -495,17 +504,16 @@ function updateSummary() {
         $('sumCar').textContent = 'Auto-detect from LMU';
     }
 
-    const wp = state.overrides.weatherPreset;
-    if (wp === 'dry') {
-        $('sumWx').textContent = 'GO Setups Dry · 20°C · Saturated';
-    } else if (wp === 'overcast_rain') {
-        $('sumWx').textContent = 'GO Setups Rain · 75% · 20°C';
+    const p = state.overrides.sessions.practice;
+    if (p.weatherPreset === 'dry') {
+        $('sumWx').textContent = 'Dry · 20°C · Saturated';
+    } else if (p.weatherPreset === 'overcast_rain') {
+        $('sumWx').textContent = 'Wet · Overcast & rain · 100% · 20°C';
     } else {
-        const cw = state.overrides.customWeather;
-        $('sumWx').textContent = `Custom · ${cw.temperature}°C · ${cw.rainChance}% rain`;
+        const slot0 = p.customWeather[0];
+        $('sumWx').textContent = `Custom · ${slot0.temperature}°C · ${slot0.rainChance}% rain`;
     }
-
-    $('sumLen').textContent = `${state.overrides.practiceLength} min @ ${formatTime(state.overrides.practiceStartingTime)}`;
+    $('sumLen').textContent = `${p.length} min @ ${formatTime(p.startTime)}`;
 }
 
 // ───────── Bindings ─────────
@@ -529,7 +537,7 @@ function bindCustomRange(id, key, fmt) {
     const out = $(`${id}Val`);
     const update = () => {
         const v = Number(el.value);
-        state.overrides.customWeather[key] = v;
+        state.overrides.sessions.practice.customWeather[0][key] = v;
         if (out) out.textContent = fmt(v);
         updateRangeFill(el);
         updateSummary();
@@ -553,6 +561,22 @@ function bindSelect(id, key, parser) {
         updateSummary();
     });
     state.overrides[key] = parser ? parser(el.value) : el.value;
+}
+
+function bindToSession(id, sessionKey, fieldKey, parser) {
+    const el = $(id);
+    if (!el) return;
+    const out = $(`${id}Val`);
+    const update = () => {
+        const raw = el.type === 'checkbox' ? el.checked : el.value;
+        const v = parser ? parser(raw) : raw;
+        state.overrides.sessions[sessionKey][fieldKey] = v;
+        if (out && el.type === 'range') out.textContent = (typeof parser === 'function' && parser !== Number) ? parser(raw) : String(raw);
+        if (el.type === 'range') updateRangeFill(el);
+        updateSummary();
+    };
+    el.addEventListener(el.type === 'checkbox' || el.type === 'range' ? 'input' : 'change', update);
+    update();
 }
 
 // ───────── Launch ─────────
@@ -583,7 +607,7 @@ async function onLaunch() {
     $('log').innerHTML = '';
     $('log').classList.remove('hidden');
     $('logToggle').classList.add('open');
-    logLine(`Launching with "${payload.overrides.weatherPreset}" preset…`, 'ok');
+    logLine(`Launching with "${payload.overrides.sessions?.practice?.weatherPreset ?? 'dry'}" preset…`, 'ok');
 
     try {
         const result = await window.go.launch(payload);
@@ -800,28 +824,28 @@ document.addEventListener('DOMContentLoaded', () => {
     })();
 
     // Session settings — bind ranges
-    bindRange('practiceLength', 'practiceLength', (v) => `${v} min`);
-    bindRange('startTime', 'practiceStartingTime', formatTime);
-    bindRange('realRoadTimeScale', 'realRoadTimeScale', (v) => `${v}×`);
+    bindToSession('practiceLength', 'practice', 'length', Number);
+    bindToSession('startTime', 'practice', 'startTime', Number);
+    bindToSession('realRoadTimeScale', 'practice', 'realRoadTimeScale', Number);
     bindRange('timeScale', 'timeScale', formatTimeScale);
     bindRange('trackLimitsPoints', 'trackLimitsPoints', (v) => String(v));
 
     // Session settings — bind selects (numeric)
-    bindSelect('startingGrip', 'startingGrip');
+    bindToSession('startingGrip', 'practice', 'startingGrip');
     bindSelect('flagRules', 'flagRules', Number);
     bindSelect('trackLimitsRules', 'trackLimitsRules', Number);
     bindSelect('mechanicalFailures', 'mechanicalFailures', Number);
 
     // Toggles (hidden checkboxes driven by rule pills)
     bindCheckbox('tireWarmers', 'tireWarmers');
-    bindCheckbox('privatePractice', 'privatePractice');
+    bindToSession('privatePractice', 'practice', 'privateSession');
 
     // Custom weather sliders
     bindCustomRange('cwTemp', 'temperature', (v) => `${v}°C`);
     bindCustomRange('cwRain', 'rainChance', (v) => `${v}%`);
     const cwSkyEl = $('cwSky');
     if (cwSkyEl) cwSkyEl.addEventListener('change', (e) => {
-        state.overrides.customWeather.sky = Number(e.target.value);
+        state.overrides.sessions.practice.customWeather[0].sky = Number(e.target.value);
         updateSummary();
     });
 

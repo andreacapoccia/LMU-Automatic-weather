@@ -253,10 +253,12 @@ function composeSession({ presetJson, liveSelection, overrides }) {
 
     // Resolve which captured blob to send. "custom" picks based on rain%.
     let blobName;
-    if (o.weatherPreset === 'custom') {
-        blobName = pickBlobForCustomRain(Number(o.customWeather?.rainChance) || 0);
+    const practiceWp = o.sessions?.practice?.weatherPreset ?? o.weatherPreset ?? 'dry';
+    if (practiceWp === 'custom') {
+        const cw0 = o.sessions?.practice?.customWeather?.[0] || o.customWeather || {};
+        blobName = pickBlobForCustomRain(Number(cw0.rainChance) || 0);
     } else {
-        blobName = WEATHER_PRESETS.includes(o.weatherPreset) ? o.weatherPreset : 'dry';
+        blobName = WEATHER_PRESETS.includes(practiceWp) ? practiceWp : 'dry';
     }
     const weatherBlob = WEATHER_BLOBS[blobName];
 
@@ -277,11 +279,12 @@ function composeSession({ presetJson, liveSelection, overrides }) {
     sp.Player.DRIVER.Vehicle = vehicleStr;
 
     // Apply user overrides to Game Options + Race Conditions.
-    sp.Player['Game Options']['practice length'] = Number(o.practiceLength);
+    const practice = o.sessions?.practice || {};
+    sp.Player['Game Options']['practice length'] = Number(practice.length ?? o.practiceLength ?? 60);
     sp.Player['Game Options']['Tire Warmers'] = !!o.tireWarmers;
-    sp.Player['Race Conditions'].Practice1StartingTime = Number(o.practiceStartingTime);
-    sp.Player['Race Conditions'].PrivatePractice = !!o.privatePractice;
-    sp.Player['Race Conditions'].RealRoadTimeScalePractice = Number(o.realRoadTimeScale);
+    sp.Player['Race Conditions'].Practice1StartingTime = Number(practice.startTime ?? o.practiceStartingTime ?? 720);
+    sp.Player['Race Conditions'].PrivatePractice = !!(practice.privateSession ?? o.privatePractice ?? true);
+    sp.Player['Race Conditions'].RealRoadTimeScalePractice = Number(practice.realRoadTimeScale ?? o.realRoadTimeScale ?? 0);
     sp.Player['Race Conditions'].Weather = 4;          // scripted
     sp.Player['Race Conditions'].TimeScaledWeather = true;
     sp.Player['Race Conditions'].RaceTimeScale = Number(o.timeScale);
@@ -297,28 +300,30 @@ function composeSession({ presetJson, liveSelection, overrides }) {
         const block = sp.Weather?.[session];
         if (!block) continue;
         block.Road = block.Road || {};
-        block.Road.RealRoad = String(o.startingGrip);
+        const sessKey = session.toLowerCase();
+        const ss = o.sessions?.[sessKey] || {};
+        block.Road.RealRoad = String(ss.startingGrip ?? o.startingGrip ?? 'preset:SATURATED.RRBIN');
         block.Road.WaterDepth = Number(o.waterDepth);
         block.Road.LoadTemperaturesFromRealRoadFile = false;
 
         // For "custom" weather, also stamp the user-tuned values into every
         // weather slice. The binary blob still drives the actual game weather,
         // but slice values show in LMU's pre-session weather summary.
-        if (o.weatherPreset === 'custom' && o.customWeather && Array.isArray(block.Weather)) {
-            const cw = o.customWeather;
-            for (const slice of block.Weather) {
-                if (cw.sky != null) slice.Sky = Number(cw.sky);
-                if (cw.rainChance != null) slice.RainChance = Number(cw.rainChance);
-                if (cw.temperature != null) slice.Temperature = Number(cw.temperature);
-                if (cw.humidity != null) slice.Humidity = Number(cw.humidity);
-                if (cw.windSpeed != null) slice.WindSpeed = Number(cw.windSpeed);
-                if (cw.windDirection != null) slice.WindDirection = Number(cw.windDirection);
+        const sessWeatherPreset = ss.weatherPreset ?? o.weatherPreset ?? 'dry';
+        if (sessWeatherPreset === 'custom' && Array.isArray(ss.customWeather) && Array.isArray(block.Weather)) {
+            for (let i = 0; i < block.Weather.length && i < ss.customWeather.length; i++) {
+                const slot = ss.customWeather[i];
+                if (slot.sky != null)         block.Weather[i].Sky         = Number(slot.sky);
+                if (slot.rainChance != null)  block.Weather[i].RainChance  = Number(slot.rainChance);
+                if (slot.temperature != null) block.Weather[i].Temperature = Number(slot.temperature);
             }
         }
     }
 
     // Compute end ET from practice length (green flag at +5s).
-    const endET = Number(o.practiceLength) * 60 + 5;
+    const practiceLength = Number(practice.length ?? o.practiceLength ?? 60);
+    const practiceStartingTime = Number(practice.startTime ?? o.practiceStartingTime ?? 720);
+    const endET = practiceLength * 60 + 5;
 
     return {
         save: {
@@ -350,8 +355,8 @@ function composeSession({ presetJson, liveSelection, overrides }) {
             sessionState: 8,
             sessionTimescale: 0,
             startET: 5,
-            startTime: Number(o.practiceStartingTime) * 60,
-            timeOfDay: Number(o.practiceStartingTime) * 60,
+            startTime: practiceStartingTime * 60,
+            timeOfDay: practiceStartingTime * 60,
             uniqueSessionID: Math.floor(Math.random() * 0x7fffffff),
         },
     };
@@ -395,7 +400,7 @@ async function launchSession({ track, overrides, emit }) {
     const live = await getCurrentSelection();
     if (live?.vehicle) log(`Using player-selected car: ${live.vehicle}`);
 
-    log(`Composing session with weather preset "${overrides?.weatherPreset || 'dry'}"…`);
+    log(`Composing session with weather preset "${overrides?.sessions?.practice?.weatherPreset ?? overrides?.weatherPreset ?? 'dry'}"…`);
     const body = composeSession({ presetJson: preset, liveSelection: live, overrides });
 
     log('Loading session into LMU…');

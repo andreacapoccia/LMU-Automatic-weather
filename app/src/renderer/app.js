@@ -50,6 +50,7 @@ const $ = (id) => document.getElementById(id);
 
 function logLine(line, kind = '') {
     const log = $('log');
+    if (!log) { console[kind === 'err' ? 'error' : 'log']('[GO]', line); return; }
     const ts = new Date().toLocaleTimeString([], { hour12: false });
     const div = document.createElement('div');
     if (kind) div.className = kind;
@@ -57,9 +58,10 @@ function logLine(line, kind = '') {
     log.appendChild(div);
     log.scrollTop = log.scrollHeight;
     // Auto-open the log on first error
+    const logToggle = $('logToggle');
     if (kind === 'err' && log.classList.contains('hidden')) {
         log.classList.remove('hidden');
-        $('logToggle').classList.add('open');
+        if (logToggle) logToggle.classList.add('open');
     }
 }
 
@@ -463,24 +465,34 @@ function updateSummary() {
             trackSummary += ' · ' + layoutOpt.textContent;
         }
     }
-    $('sumTrack').textContent = trackSummary;
+    const sumTrack = $('sumTrack');
+    if (sumTrack) sumTrack.textContent = trackSummary;
 
-    if (state.overrides.vehicleString) {
-        $('sumCar').textContent = state.overrides.vehicleString;
-    } else {
-        $('sumCar').textContent = 'Auto-detect from LMU';
+    const sumCar = $('sumCar');
+    if (sumCar) {
+        sumCar.textContent = state.overrides.vehicleString ? state.overrides.vehicleString : 'Auto-detect from LMU';
     }
 
-    const p = state.overrides.sessions.practice;
-    if (p.weatherPreset === 'dry') {
-        $('sumWx').textContent = 'Dry · 20°C · Saturated';
-    } else if (p.weatherPreset === 'overcast_rain') {
-        $('sumWx').textContent = 'Wet · Overcast & rain · 100% · 20°C';
-    } else {
-        const slot0 = p.customWeather[0];
-        $('sumWx').textContent = `Custom · ${slot0.temperature}°C · ${slot0.rainChance}% rain`;
+    // Sessions summary: list enabled session abbreviations
+    const sumSessions = $('sumSessions');
+    if (sumSessions) {
+        const abbr = { practice: 'Practice', qualifying: 'Qualifying', race: 'Race' };
+        const enabled = Object.keys(state.overrides.sessions).filter((sk) => state.overrides.sessions[sk].enabled);
+        sumSessions.textContent = enabled.length > 0 ? enabled.map((sk) => abbr[sk] || sk).join(' · ') : 'None enabled';
     }
-    $('sumLen').textContent = `${p.length} min @ ${formatTime(p.startTime)}`;
+
+    // Length tile: total enabled session minutes
+    const sumLen = $('sumLen');
+    if (sumLen) {
+        const enabledSessions = Object.values(state.overrides.sessions).filter((s) => s.enabled);
+        if (enabledSessions.length === 0) {
+            sumLen.textContent = '—';
+        } else {
+            const total = enabledSessions.reduce((acc, s) => acc + s.length, 0);
+            const h = Math.floor(total / 60), m = total % 60;
+            sumLen.textContent = h > 0 ? `${h}h ${m > 0 ? m + 'm' : ''} total`.trim() : `${m} min total`;
+        }
+    }
 }
 
 // ───────── Bindings ─────────
@@ -532,13 +544,683 @@ function bindToSession(id, sessionKey, fieldKey, parser) {
     update();
 }
 
-// ───────── Sessions panel (D2) ─────────
-function formatLengthLabel(min) {
-    const h = Math.floor(min / 60);
-    const m = min % 60;
-    return h > 0 ? `${h}h ${m}m` : `${m} min`;
+// ───────── Sessions v3 render ─────────
+const SKY_OPTS = [
+    'Clear','Light clouds','Partially cloudy','Mostly cloudy','Overcast',
+    'Cloudy & drizzle','Cloudy & light rain','Overcast & light rain',
+    'Overcast & rain','Overcast & heavy rain','Overcast & storm'
+];
+
+const SKY_ICONS = [
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4.5"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"><path d="M12 2v2.4"/><path d="M12 19.6V22"/><path d="M2 12h2.4"/><path d="M19.6 12H22"/><path d="M4.9 4.9l1.7 1.7"/><path d="M17.4 17.4l1.7 1.7"/><path d="M4.9 19.1l1.7-1.7"/><path d="M17.4 6.6l1.7-1.7"/></g></svg>',
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="8.5" cy="8.5" r="3"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"><path d="M8.5 2.2v1.4"/><path d="M2.2 8.5h1.4"/><path d="M3.8 3.8l1 1"/><path d="M14.2 14.2l-1-1"/><path d="M3.8 13.2l1-1"/></g><path d="M21 16a3.2 3.2 0 0 0-6-1.4 2.6 2.6 0 1 0-1.2 5h6.4A2.6 2.6 0 0 0 21 16z"/></svg>',
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="7.5" cy="7.5" r="2.8"/><g stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"><path d="M7.5 1.8v1.2"/><path d="M1.8 7.5H3"/><path d="M3.4 3.4l.9.9"/><path d="M11.6 3.4l-.9.9"/></g><path d="M22 14.5a4 4 0 0 0-7.6-1.7 3 3 0 1 0-1.4 5.7h7.4a3 3 0 0 0 1.6-4z"/></svg>',
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="6" r="2.2" opacity=".95"/><path d="M22 14a4.5 4.5 0 0 0-8.6-1.9A3.5 3.5 0 1 0 12 19.5h7.5A3.5 3.5 0 0 0 22 14z"/></svg>',
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M20 13.5A4.8 4.8 0 0 0 11 11a4.2 4.2 0 1 0-1.5 8.2H19a3 3 0 0 0 1-5.7z"/></svg>',
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.5 11A4.5 4.5 0 0 0 11 8.5a4 4 0 1 0-1.5 7.8h9.5a3 3 0 0 0 .5-5.3z"/><circle cx="9.5" cy="20" r="1"/><circle cx="14.5" cy="20" r="1"/></svg>',
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="6" r="2" opacity=".95"/><path d="M20 12.5A4.2 4.2 0 0 0 11.6 10.2 3.6 3.6 0 1 0 10 17.4h8.5a2.8 2.8 0 0 0 1.5-4.9z"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"><path d="M11 19.5l-1 2.5"/><path d="M16 19.5l-1 2.5"/></g></svg>',
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11A4.8 4.8 0 0 0 11 8.5a4.2 4.2 0 1 0-1.5 8H19a3 3 0 0 0 1-5.5z"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"><path d="M9 18.5l-1 3"/><path d="M15 18.5l-1 3"/></g></svg>',
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20 10A4.8 4.8 0 0 0 11 7.5a4.2 4.2 0 1 0-1.5 8H19a3 3 0 0 0 1-5.5z"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"><path d="M8 17.5l-1.5 4"/><path d="M12 17.5l-1.5 4"/><path d="M16 17.5l-1.5 4"/></g></svg>',
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20 9.5A4.8 4.8 0 0 0 11 7a4.2 4.2 0 1 0-1.5 8H19a3 3 0 0 0 1-5.5z"/><g stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"><path d="M7 16.5L5 22"/><path d="M11 16.5L9 22"/><path d="M15 16.5L13 22"/><path d="M19 16.5L17 22"/></g></svg>',
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M20 9.5A4.8 4.8 0 0 0 11 7a4.2 4.2 0 1 0-1.5 8H19a3 3 0 0 0 1-5.5z"/><path d="M12 14.5l-3.2 5.5h3l-1.4 4.2 5.4-6.4h-3.2l2-3.3z" fill="#ffe082" stroke="#1a1f50" stroke-width=".7" stroke-linejoin="round"/></svg>',
+];
+
+function skyIcon(idx) { return SKY_ICONS[idx] || ''; }
+
+const GRIP_OPTS = [
+    ['preset:SATURATED.RRBIN','Saturated'],['preset:HEAVY.RRBIN','Heavy'],
+    ['preset:MEDIUM.RRBIN','Medium'],['preset:LIGHT.RRBIN','Light'],['preset:GREEN.RRBIN','Green'],
+];
+
+const SESSION_META = {
+    practice:   { label: 'Practice',   eyebrow: '01' },
+    qualifying: { label: 'Qualifying', eyebrow: '02' },
+    race:       { label: 'Race',        eyebrow: '03' },
+};
+
+function fmtLength(min) { const h = Math.floor(min / 60), m = min % 60; return h > 0 ? `${h}h ${m}m` : `${m} min`; }
+function fmtTime(m) { m = ((m % 1440) + 1440) % 1440; const h = Math.floor(m / 60), mm = String(m % 60).padStart(2, '0'); return `${String(h).padStart(2, '0')}:${mm}`; }
+
+function renderSlot(slot, idx, editable) {
+    return `<div class="wx-slot ${editable ? '' : 'disabled'}" data-sky="${slot.sky}" data-slot="${idx}">
+    <div class="wx-slot-idx">${idx + 1}</div>
+    <div class="wx-slot-icon">${skyIcon(slot.sky)}</div>
+    <div class="wx-slot-temp">${slot.temperature}°</div>
+    <div class="wx-slot-rain">${slot.rainChance}%</div>
+  </div>`;
 }
 
+function buildSession(sk) {
+    const s = state.overrides.sessions[sk];
+    const meta = SESSION_META[sk];
+    const isRace = sk === 'race';
+    const isCustom = s.weatherPreset === 'custom';
+    const grip = s.startingGrip;
+    const realRoad = s.realRoadTimeScale;
+    return `<div class="session-card" data-session="${sk}" data-enabled="${s.enabled}">
+    <div class="session-head">
+      <span class="session-name"><span class="sn-eyebrow">${meta.eyebrow}</span>${meta.label}</span>
+      <label class="sess-switch">
+        <input type="checkbox" ${s.enabled ? 'checked' : ''} data-session="${sk}" data-toggle />
+        <span class="sess-switch-track"><span class="sess-switch-thumb"></span></span>
+      </label>
+    </div>
+    <div class="session-body">
+      <div class="wx-block">
+        <div class="sg-title">Weather</div>
+        <div class="wx-preset-row">
+          <button class="wx-pill ${s.weatherPreset === 'dry' ? 'active' : ''}" data-preset="dry">${skyIcon(0)}Dry</button>
+          <button class="wx-pill ${s.weatherPreset === 'overcast_rain' ? 'active' : ''}" data-preset="overcast_rain">${skyIcon(8)}Wet</button>
+          <button class="wx-pill ${s.weatherPreset === 'custom' ? 'active' : ''}" data-preset="custom"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"/><path d="M9 15l3-3 3 3"/><path d="M5 4h14"/><path d="M5 8h14"/></svg>Custom</button>
+        </div>
+        <div class="wx-timeline">
+          ${s.customWeather.map((slot, i) => renderSlot(slot, i, isCustom)).join('')}
+        </div>
+        <div class="wx-editor" data-editor>
+          <div class="wxe-head">
+            <div class="wxe-title">
+              <span class="eyebrow">Slot <span data-slot-num>1</span> / 5 · <span data-slot-time>00:00 → 01:00</span></span>
+              <h4 data-slot-skyname>Clear</h4>
+            </div>
+            <button class="wxe-close" data-close>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div>
+            <div class="sg-title" style="margin-bottom:6px">Sky condition</div>
+            <div class="wxe-sky-grid">
+              ${SKY_OPTS.map((label, i) => `<button class="wxe-sky" data-sky-idx="${i}" title="${label}"><span class="wxe-sky-icon" data-sky-icon-idx="${i}">${skyIcon(i)}</span><span class="wxe-sky-num">${i}</span></button>`).join('')}
+            </div>
+          </div>
+          <div class="wxe-grid">
+            <div class="wxe-num">
+              <div class="wxe-num-head"><span class="lbl">Air temperature</span><span class="val" data-temp-val>22<span class="unit">°C</span></span></div>
+              <input type="range" min="-5" max="45" value="22" data-edit="temp" />
+            </div>
+            <div class="wxe-num">
+              <div class="wxe-num-head"><span class="lbl">Rain chance</span><span class="val" data-rain-val>0<span class="unit">%</span></span></div>
+              <input type="range" min="0" max="100" value="0" data-edit="rain" />
+            </div>
+          </div>
+          <div class="wxe-actions">
+            <button class="wxe-action" data-action="copy-prev"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Copy previous</button>
+            <button class="wxe-action" data-action="apply-forward">Apply to next slots<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+            <button class="wxe-action" data-action="apply-all">Apply to all slots</button>
+            <button class="wxe-action primary" data-action="apply-all-sessions"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Apply to all sessions</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sg-title">Length &amp; timing</div>
+      ${isRace ? `<label class="field"><span class="field-label">Start type</span>
+        <select class="select" data-field="startType"><option value="rolling" ${(s.startType || 'rolling') === 'rolling' ? 'selected' : ''}>Rolling</option><option value="fast_rolling" ${(s.startType || '') === 'fast_rolling' ? 'selected' : ''}>Fast Rolling</option></select></label>` : ''}
+      <div class="slider-row">
+        <div class="slider-label"><span class="lbl">Length</span><span class="val">${fmtLength(s.length)}</span></div>
+        <input type="range" min="1" max="${isRace ? 1440 : 360}" value="${s.length}" data-field="length" />
+      </div>
+      <div class="slider-row">
+        <div class="slider-label"><span class="lbl">Start time</span><span class="val">${fmtTime(s.startTime)}</span></div>
+        <input type="range" min="0" max="1439" value="${s.startTime}" data-field="startTime" />
+      </div>
+
+      <div class="sg-title">Track conditions</div>
+      <div class="sess-2col">
+        <label class="field">
+          <span class="field-label">Grip</span>
+          <select class="select" data-field="startingGrip">${GRIP_OPTS.map(([v, l]) => `<option value="${v}" ${v === grip ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        </label>
+        <div class="slider-row">
+          <div class="slider-label"><span class="lbl">RealRoad</span><span class="val">${realRoad}×</span></div>
+          <input type="range" min="0" max="15" value="${realRoad}" data-field="realRoadTimeScale" />
+        </div>
+      </div>
+
+      ${!isRace ? `<label class="field-toggle">
+        <span class="field-label">Private session</span>
+        <label class="sess-switch"><input type="checkbox" ${s.privateSession ? 'checked' : ''} data-field="privateSession" /><span class="sess-switch-track"><span class="sess-switch-thumb"></span></span></label>
+      </label>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderAllSessions() {
+    const list = $('sessionsList');
+    if (!list) return;
+    list.innerHTML = Object.keys(state.overrides.sessions).map(buildSession).join('');
+    bindSessionCards();
+    enhanceSelects(list);
+}
+
+function bindSessionCards() {
+    // Enable toggles
+    document.querySelectorAll('input[data-toggle]').forEach((cb) => {
+        cb.addEventListener('change', () => {
+            const card = cb.closest('.session-card');
+            const sk = card.dataset.session;
+            state.overrides.sessions[sk].enabled = cb.checked;
+            if (card) card.dataset.enabled = String(cb.checked);
+            updateSummary();
+        });
+    });
+
+    // Preset pills
+    document.querySelectorAll('.wx-pill').forEach((p) => {
+        p.addEventListener('click', () => {
+            const row = p.parentElement;
+            row.querySelectorAll('.wx-pill').forEach((x) => x.classList.remove('active'));
+            p.classList.add('active');
+            const card = p.closest('.session-card');
+            const sk = card.dataset.session;
+            const preset = p.dataset.preset;
+            state.overrides.sessions[sk].weatherPreset = preset;
+            const tl = card.querySelector('.wx-timeline');
+            const isCustom = preset === 'custom';
+            tl.querySelectorAll('.wx-slot').forEach((s) => s.classList.toggle('disabled', !isCustom));
+            setDirty(true);
+            updateSummary();
+        });
+    });
+
+    // Slot click → open editor
+    document.querySelectorAll('.wx-slot').forEach((slotEl) => {
+        slotEl.addEventListener('click', () => {
+            if (slotEl.classList.contains('disabled')) return;
+            openEditor(slotEl);
+        });
+    });
+
+    // Editor interactions (per-card)
+    document.querySelectorAll('.wx-editor').forEach((ed) => {
+        ed.querySelector('[data-close]').addEventListener('click', () => {
+            ed.classList.remove('open');
+            ed.closest('.session-card').querySelectorAll('.wx-slot.active').forEach((x) => x.classList.remove('active'));
+        });
+
+        // Sky picker
+        ed.querySelectorAll('.wxe-sky').forEach((b) => {
+            b.addEventListener('click', () => {
+                ed.querySelectorAll('.wxe-sky').forEach((x) => x.classList.remove('active'));
+                b.classList.add('active');
+                const idx = +b.dataset.skyIdx;
+                const card = ed.closest('.session-card');
+                const activeSlot = card.querySelector('.wx-slot.active');
+                if (activeSlot) {
+                    activeSlot.dataset.sky = idx;
+                    activeSlot.querySelector('.wx-slot-icon').innerHTML = skyIcon(idx);
+                    ed.querySelector('[data-slot-skyname]').textContent = SKY_OPTS[idx];
+                    const sk = card.dataset.session;
+                    state.overrides.sessions[sk].customWeather[+activeSlot.dataset.slot].sky = idx;
+                    setDirty(true);
+                    updateSummary();
+                }
+            });
+        });
+
+        // Temp slider
+        ed.querySelector('[data-edit="temp"]').addEventListener('input', (e) => {
+            ed.querySelector('[data-temp-val]').innerHTML = e.target.value + '<span class="unit">°C</span>';
+            updateRangeFill(e.target);
+            const card = ed.closest('.session-card');
+            const activeSlot = card.querySelector('.wx-slot.active');
+            if (activeSlot) {
+                activeSlot.querySelector('.wx-slot-temp').textContent = e.target.value + '°';
+                const sk = card.dataset.session;
+                state.overrides.sessions[sk].customWeather[+activeSlot.dataset.slot].temperature = +e.target.value;
+                setDirty(true);
+                updateSummary();
+            }
+        });
+
+        // Rain slider
+        ed.querySelector('[data-edit="rain"]').addEventListener('input', (e) => {
+            ed.querySelector('[data-rain-val]').innerHTML = e.target.value + '<span class="unit">%</span>';
+            updateRangeFill(e.target);
+            const card = ed.closest('.session-card');
+            const activeSlot = card.querySelector('.wx-slot.active');
+            if (activeSlot) {
+                activeSlot.querySelector('.wx-slot-rain').textContent = e.target.value + '%';
+                const sk = card.dataset.session;
+                state.overrides.sessions[sk].customWeather[+activeSlot.dataset.slot].rainChance = +e.target.value;
+                setDirty(true);
+                updateSummary();
+            }
+        });
+
+        // Action buttons (copy-prev, apply-forward, apply-all, apply-all-sessions)
+        ed.querySelectorAll('.wxe-action').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const card = ed.closest('.session-card');
+                const sk = card.dataset.session;
+                const sess = state.overrides.sessions[sk];
+                const activeSlot = card.querySelector('.wx-slot.active');
+                if (!activeSlot) return;
+                const idx = +activeSlot.dataset.slot;
+                const src = { ...sess.customWeather[idx] };
+                const action = btn.dataset.action;
+
+                function applySlotEl(targetSk, i) {
+                    state.overrides.sessions[targetSk].customWeather[i] = { ...src };
+                    const c = document.querySelector(`.session-card[data-session="${targetSk}"]`);
+                    const sl = c && c.querySelector(`.wx-slot[data-slot="${i}"]`);
+                    if (sl) {
+                        sl.dataset.sky = src.sky;
+                        sl.querySelector('.wx-slot-icon').innerHTML = skyIcon(src.sky);
+                        sl.querySelector('.wx-slot-temp').textContent = src.temperature + '°';
+                        sl.querySelector('.wx-slot-rain').textContent = src.rainChance + '%';
+                    }
+                }
+
+                if (action === 'copy-prev' && idx > 0) {
+                    sess.customWeather[idx] = { ...sess.customWeather[idx - 1] };
+                    openEditor(activeSlot);
+                } else if (action === 'apply-forward') {
+                    for (let i = idx + 1; i < 5; i++) applySlotEl(sk, i);
+                } else if (action === 'apply-all') {
+                    for (let i = 0; i < 5; i++) if (i !== idx) applySlotEl(sk, i);
+                } else if (action === 'apply-all-sessions') {
+                    Object.keys(state.overrides.sessions).forEach((tsk) => {
+                        for (let i = 0; i < 5; i++) {
+                            if (!(tsk === sk && i === idx)) applySlotEl(tsk, i);
+                        }
+                    });
+                }
+                setDirty(true);
+                updateSummary();
+            });
+        });
+    });
+
+    // Session field inputs (ranges, selects, checkboxes)
+    document.querySelectorAll('.session-card input[data-field], .session-card select[data-field]').forEach((el) => {
+        const field = el.dataset.field;
+        if (!field) return;
+        const card = el.closest('.session-card');
+        const sk = card.dataset.session;
+        const sliderRow = el.closest('.slider-row');
+        const valEl = sliderRow && sliderRow.querySelector('.val');
+
+        const update = () => {
+            const raw = el.type === 'checkbox' ? el.checked : el.value;
+            let v = (el.type === 'range' || field === 'realRoadTimeScale') ? Number(raw) : raw;
+            state.overrides.sessions[sk][field] = v;
+            if (valEl) {
+                if (field === 'length') valEl.textContent = fmtLength(Number(raw));
+                else if (field === 'startTime') valEl.textContent = fmtTime(Number(raw));
+                else if (field === 'realRoadTimeScale') valEl.textContent = raw + '×';
+            }
+            if (el.type === 'range') updateRangeFill(el);
+            setDirty(true);
+            updateSummary();
+        };
+
+        el.addEventListener(el.type === 'checkbox' ? 'change' : (el.type === 'range' ? 'input' : 'change'), update);
+        if (el.type === 'range') updateRangeFill(el);
+    });
+}
+
+function openEditor(slotEl) {
+    const card = slotEl.closest('.session-card');
+    const editor = card.querySelector('[data-editor]');
+    const tl = slotEl.parentElement;
+    card.querySelectorAll('.wx-slot.active').forEach((x) => x.classList.remove('active'));
+    slotEl.classList.add('active');
+
+    // arrow position: align under the clicked slot
+    const slotRect = slotEl.getBoundingClientRect();
+    const tlRect = tl.getBoundingClientRect();
+    const arrowLeft = slotRect.left - tlRect.left + slotRect.width / 2 - 4;
+    editor.style.setProperty('--arrow-left', arrowLeft + 'px');
+
+    const idx = +slotEl.dataset.slot;
+    const sk = card.dataset.session;
+    const sess = state.overrides.sessions[sk];
+    const slotData = sess.customWeather[idx];
+
+    editor.querySelector('[data-slot-num]').textContent = idx + 1;
+    editor.querySelector('[data-slot-skyname]').textContent = SKY_OPTS[slotData.sky];
+
+    const segLen = sess.length / 5;
+    const segStart = sess.startTime + Math.round(segLen * idx);
+    const segEnd = sess.startTime + Math.round(segLen * (idx + 1));
+    editor.querySelector('[data-slot-time]').textContent = `${fmtTime(segStart)} → ${fmtTime(segEnd)}`;
+
+    editor.querySelectorAll('.wxe-sky').forEach((b) => {
+        b.classList.toggle('active', +b.dataset.skyIdx === slotData.sky);
+    });
+    const tempIn = editor.querySelector('[data-edit="temp"]');
+    tempIn.value = slotData.temperature;
+    editor.querySelector('[data-temp-val]').innerHTML = slotData.temperature + '<span class="unit">°C</span>';
+    updateRangeFill(tempIn);
+    const rainIn = editor.querySelector('[data-edit="rain"]');
+    rainIn.value = slotData.rainChance;
+    editor.querySelector('[data-rain-val]').innerHTML = slotData.rainChance + '<span class="unit">%</span>';
+    updateRangeFill(rainIn);
+
+    editor.classList.add('open');
+}
+
+// ───────── Preset Management (IPC-backed) ─────────
+const PRESET_CAP = 50;
+
+async function loadUserPresets() {
+    const arr = await window.go.getSetting('customWeatherPresets');
+    return Array.isArray(arr) ? arr : [];
+}
+
+async function saveUserPresets(arr) {
+    const trimmed = arr.length > PRESET_CAP ? arr.slice(0, PRESET_CAP) : arr;
+    await window.go.setSetting('customWeatherPresets', trimmed);
+}
+
+function snapshotCurrentWeather() {
+    const out = {};
+    Object.keys(state.overrides.sessions).forEach((sk) => {
+        out[sk] = state.overrides.sessions[sk].customWeather.map((s) => ({ ...s }));
+    });
+    return out;
+}
+
+let activePresetId = null;
+let isDirty = false;
+
+function setDirty(d) {
+    isDirty = d;
+    const bar = document.querySelector('.preset-bar');
+    if (bar) bar.classList.toggle('is-dirty', d);
+}
+
+function setActivePreset(p) {
+    activePresetId = p ? p.id : null;
+    const nameEl = $('presetName');
+    if (nameEl) nameEl.textContent = p ? p.name : 'Custom';
+    setDirty(false);
+}
+
+const BUILTIN_PRESETS = [
+    {
+        id: 'dry-all', name: 'Clear weekend', builtin: true,
+        weather: { practice: Array(5).fill(null).map(() => ({ sky: 0, rainChance: 0, temperature: 22 })), qualifying: Array(5).fill(null).map(() => ({ sky: 0, rainChance: 0, temperature: 22 })), race: Array(5).fill(null).map(() => ({ sky: 0, rainChance: 0, temperature: 22 })) },
+    },
+    {
+        id: 'wet-race', name: 'Wet race', builtin: true,
+        weather: { practice: Array(5).fill(null).map(() => ({ sky: 0, rainChance: 0, temperature: 22 })), qualifying: Array(5).fill(null).map(() => ({ sky: 4, rainChance: 30, temperature: 18 })), race: Array(5).fill(null).map((_, i) => ({ sky: 6 + Math.min(i, 2), rainChance: 50 + i * 10, temperature: 17 - i })) },
+    },
+];
+
+async function buildPresetMenu() {
+    const presetMenu = $('presetMenu');
+    if (!presetMenu) return;
+    const user = await loadUserPresets();
+    let html = '';
+    if (user.length) {
+        html += '<div class="preset-menu-section">My presets</div>';
+        html += user.map((p) => presetItemHtml(p, false)).join('');
+        html += '<div class="preset-divider"></div>';
+    }
+    html += '<div class="preset-menu-section">Built-in</div>';
+    html += BUILTIN_PRESETS.map((p) => presetItemHtml(p, true)).join('');
+    presetMenu.innerHTML = html;
+
+    presetMenu.querySelectorAll('.preset-item').forEach((el) => {
+        el.addEventListener('click', async (e) => {
+            if (e.target.closest('.pi-del')) return;
+            const id = el.dataset.id;
+            const allPresets = [...BUILTIN_PRESETS, ...(await loadUserPresets())];
+            const p = allPresets.find((x) => x.id === id);
+            if (p && p.weather) {
+                Object.keys(p.weather).forEach((sk) => {
+                    if (state.overrides.sessions[sk]) {
+                        state.overrides.sessions[sk].customWeather = p.weather[sk].map((s) => ({ ...s }));
+                    }
+                });
+                setActivePreset(p);
+                renderAllSessions();
+                updateSummary();
+            }
+            closePresetMenu();
+        });
+        const delBtn = el.querySelector('.pi-del');
+        if (delBtn) {
+            delBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const arr = (await loadUserPresets()).filter((x) => x.id !== el.dataset.id);
+                await saveUserPresets(arr);
+                buildPresetMenu();
+            });
+        }
+    });
+}
+
+function presetItemHtml(p, builtin) {
+    const active = p.id === activePresetId ? 'active' : '';
+    const meta = builtin ? '<span class="pi-meta">BUILT-IN</span>' : '';
+    const del = builtin ? '' : `<button class="pi-del" title="Delete"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`;
+    return `<div class="preset-item ${active}" data-id="${p.id}"><span class="pi-name">${p.name}</span>${meta}${del}</div>`;
+}
+
+function openPresetMenu() {
+    const presetSelect = $('presetSelect');
+    const presetMenu = $('presetMenu');
+    if (!presetSelect || !presetMenu) return;
+    buildPresetMenu();
+    const r = presetSelect.getBoundingClientRect();
+    presetMenu.style.left = r.left + 'px';
+    presetMenu.style.top = (r.bottom + 6) + 'px';
+    presetMenu.classList.add('open');
+    presetSelect.classList.add('open');
+}
+
+function closePresetMenu() {
+    const presetMenu = $('presetMenu');
+    const presetSelect = $('presetSelect');
+    if (presetMenu) presetMenu.classList.remove('open');
+    if (presetSelect) presetSelect.classList.remove('open');
+}
+
+function initPresetBar() {
+    const presetSelect = $('presetSelect');
+    const presetMenu = $('presetMenu');
+    const saveModal = $('savePresetModal');
+    const saveInput = $('savePresetInput');
+
+    if (presetSelect) {
+        presetSelect.addEventListener('click', () => {
+            presetMenu && presetMenu.classList.contains('open') ? closePresetMenu() : openPresetMenu();
+        });
+    }
+
+    document.addEventListener('click', (e) => {
+        const bar = e.target.closest('.preset-bar');
+        const menu = e.target.closest('.preset-menu');
+        if (!bar && !menu) closePresetMenu();
+    });
+
+    // Save preset modal
+    const presetSaveBtn = $('presetSave');
+    if (presetSaveBtn) {
+        presetSaveBtn.addEventListener('click', () => {
+            if (saveInput) saveInput.value = '';
+            if (saveModal) {
+                saveModal.classList.add('open');
+                setTimeout(() => saveInput && saveInput.focus(), 50);
+            }
+        });
+    }
+
+    if (saveModal) {
+        saveModal.addEventListener('click', async (e) => {
+            if (e.target === saveModal || e.target.dataset.action === 'cancel') {
+                saveModal.classList.remove('open');
+            }
+            if (e.target.dataset.action === 'save') {
+                const name = saveInput ? saveInput.value.trim() : '';
+                if (!name) return;
+                const arr = await loadUserPresets();
+                const p = { id: 'u_' + Date.now(), name, weather: snapshotCurrentWeather() };
+                arr.unshift(p);
+                await saveUserPresets(arr);
+                setActivePreset(p);
+                saveModal.classList.remove('open');
+            }
+        });
+    }
+
+    if (saveInput) {
+        saveInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const saveBtn = saveModal && saveModal.querySelector('[data-action="save"]');
+                if (saveBtn) saveBtn.click();
+            }
+        });
+    }
+
+    // Export
+    const presetExport = $('presetExport');
+    if (presetExport) {
+        presetExport.addEventListener('click', () => {
+            const nameEl = $('presetName');
+            const name = (nameEl && nameEl.textContent) || 'Custom';
+            const data = { name, weather: snapshotCurrentWeather() };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = name.replace(/[^a-z0-9\-_ ]/gi, '_') + '.json';
+            a.click();
+        });
+    }
+
+    // Import
+    const fileInput = $('presetFileInput');
+    const presetImport = $('presetImport');
+    if (presetImport && fileInput) {
+        presetImport.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', async (e) => {
+            const f = e.target.files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = async () => {
+                try {
+                    const data = JSON.parse(r.result);
+                    if (data.weather) {
+                        const arr = await loadUserPresets();
+                        const p = { id: 'u_' + Date.now(), name: data.name || f.name.replace(/\.json$/, ''), weather: data.weather };
+                        arr.unshift(p);
+                        await saveUserPresets(arr);
+                        // Apply it immediately
+                        Object.keys(data.weather).forEach((sk) => {
+                            if (state.overrides.sessions[sk]) {
+                                state.overrides.sessions[sk].customWeather = data.weather[sk].map((s) => ({ ...s }));
+                            }
+                        });
+                        setActivePreset(p);
+                        renderAllSessions();
+                        updateSummary();
+                    } else {
+                        alert('Invalid preset file: missing weather data');
+                    }
+                } catch {
+                    alert('Invalid preset file');
+                }
+                fileInput.value = '';
+            };
+            r.readAsText(f);
+        });
+    }
+
+    setActivePreset(null);
+}
+
+// ───────── Rules modal ─────────
+const RULES_DEFAULTS = { timeScale: 1, flagRules: '3', trackLimitsRules: '1', trackLimitsPoints: 5, mechanicalFailures: '1', tireWarmers: true };
+const TIME_SCALE_LABELS = ['None', 'Normal', '×2'];
+
+function initRulesModal() {
+    const rulesOverlay = $('rulesOverlay');
+    const rulesBtn = $('rulesBtn');
+    const rulesBtnDot = $('rulesBtnDot');
+    const rulesClose = $('rulesClose');
+    const rulesDone = $('rulesDone');
+    const rulesReset = $('rulesReset');
+    const elTimeScale = $('timeScale');
+    const elTimeScaleVal = $('timeScaleVal');
+    const elFlagRules = $('flagRules');
+    const elTrackLimitsRules = $('trackLimitsRules');
+    const elTrackLimitsPoints = $('trackLimitsPoints');
+    const elTrackLimitsPointsVal = $('trackLimitsPointsVal');
+    const elMechFail = $('mechanicalFailures');
+    const elTireWarmers = $('tireWarmers');
+    const incidentField = $('incidentField');
+
+    if (!rulesOverlay || !rulesBtn) return;
+
+    function readRules() {
+        return {
+            timeScale: +elTimeScale.value,
+            flagRules: elFlagRules.value,
+            trackLimitsRules: elTrackLimitsRules.value,
+            trackLimitsPoints: +elTrackLimitsPoints.value,
+            mechanicalFailures: elMechFail.value,
+            tireWarmers: elTireWarmers.checked,
+        };
+    }
+
+    function writeRules(r) {
+        elTimeScale.value = r.timeScale;
+        elFlagRules.value = r.flagRules;
+        elTrackLimitsRules.value = r.trackLimitsRules;
+        elTrackLimitsPoints.value = r.trackLimitsPoints;
+        elMechFail.value = r.mechanicalFailures;
+        elTireWarmers.checked = r.tireWarmers;
+        syncRulesUI();
+    }
+
+    function isModified() {
+        const r = readRules();
+        return Object.keys(RULES_DEFAULTS).some((k) => String(r[k]) !== String(RULES_DEFAULTS[k]));
+    }
+
+    function syncRulesUI() {
+        [elTimeScale, elTrackLimitsPoints].forEach((s) => {
+            if (!s) return;
+            const min = +s.min, max = +s.max, v = +s.value;
+            s.style.setProperty('--fill', ((v - min) / (max - min) * 100) + '%');
+            updateRangeFill(s);
+        });
+        if (elTimeScaleVal) elTimeScaleVal.textContent = TIME_SCALE_LABELS[+elTimeScale.value] || formatTimeScale(+elTimeScale.value);
+        if (elTrackLimitsPointsVal) elTrackLimitsPointsVal.textContent = elTrackLimitsPoints.value;
+        if (incidentField) incidentField.classList.toggle('is-disabled', elTrackLimitsRules.value === '0');
+        if (rulesBtnDot) rulesBtnDot.hidden = !isModified();
+
+        // Sync to state
+        const r = readRules();
+        state.overrides.timeScale = r.timeScale;
+        state.overrides.flagRules = Number(r.flagRules);
+        state.overrides.trackLimitsRules = Number(r.trackLimitsRules);
+        state.overrides.trackLimitsPoints = r.trackLimitsPoints;
+        state.overrides.mechanicalFailures = Number(r.mechanicalFailures);
+        state.overrides.tireWarmers = r.tireWarmers;
+        updateSummary();
+    }
+
+    [elTimeScale, elFlagRules, elTrackLimitsRules, elTrackLimitsPoints, elMechFail, elTireWarmers].forEach((el) => {
+        if (el) el.addEventListener('input', syncRulesUI);
+    });
+
+    rulesBtn.addEventListener('click', () => { rulesOverlay.hidden = false; });
+
+    function closeRules() { rulesOverlay.hidden = true; }
+    if (rulesClose) rulesClose.addEventListener('click', closeRules);
+    if (rulesDone) rulesDone.addEventListener('click', closeRules);
+    rulesOverlay.addEventListener('click', (e) => { if (e.target === rulesOverlay) closeRules(); });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !rulesOverlay.hidden) closeRules();
+    });
+    if (rulesReset) rulesReset.addEventListener('click', () => writeRules(RULES_DEFAULTS));
+
+    syncRulesUI();
+}
+
+// ───────── Old stubs (removed) ─────────
 function bindDataInput(el) {
     const key = el.dataset.input;            // e.g. "practice_length"
     if (!key) return;
@@ -560,155 +1242,6 @@ function bindDataInput(el) {
     };
     el.addEventListener(el.type === 'checkbox' ? 'change' : (el.type === 'range' ? 'input' : 'change'), update);
     update();
-}
-
-function bindAllSessionInputs() {
-    document.querySelectorAll('[data-input]').forEach(bindDataInput);
-}
-
-function bindEnableToggles() {
-    ['practice', 'qualifying', 'race'].forEach((sk) => {
-        const cb = $(`sess${sk[0].toUpperCase() + sk.slice(1)}_enabled`);
-        if (!cb) return;
-        const card = document.querySelector(`.session-card[data-session="${sk}"]`);
-        const apply = () => {
-            state.overrides.sessions[sk].enabled = cb.checked;
-            if (card) card.dataset.enabled = String(cb.checked);
-        };
-        cb.addEventListener('change', apply);
-        apply();
-    });
-}
-
-let _customHintShown = false;
-function bindWeatherPresetPills() {
-    document.querySelectorAll('.weather-preset-row .wx-pill').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const sk = btn.dataset.session;
-            const preset = btn.dataset.preset;
-            state.overrides.sessions[sk].weatherPreset = preset;
-            btn.parentElement.querySelectorAll('.wx-pill').forEach(b => b.classList.toggle('active', b === btn));
-            const customPanel = document.querySelector(`.custom-weather[data-custom-for="${sk}"]`);
-            if (customPanel) customPanel.classList.toggle('hidden', preset !== 'custom');
-            // Path B: actual game weather follows the closest of 3 captured blobs
-            // (dry / overcast_rain / storm), picked by avg rain%. Slice values
-            // drive the in-game forecast display only. Show this hint once per session.
-            if (preset === 'custom' && !_customHintShown) {
-                _customHintShown = true;
-                logLine('Custom weather is approximated (uses closest of 3 captured weather profiles). Slice values affect the in-game forecast display only.', '');
-            }
-            updateSummary();
-        });
-    });
-}
-
-const SKY_OPTIONS = [
-    [0, 'Clear'], [1, 'Light clouds'], [2, 'Partially cloudy'], [3, 'Mostly cloudy'],
-    [4, 'Overcast'], [5, 'Cloudy & drizzle'], [6, 'Cloudy & light rain'],
-    [7, 'Overcast & light rain'], [8, 'Overcast & rain'], [9, 'Overcast & heavy rain'],
-    [10, 'Overcast & storm'],
-];
-
-function renderSlotGrid(sessKey) {
-    const grid = document.querySelector(`.custom-weather[data-custom-for="${sessKey}"] .slot-grid`);
-    if (!grid) return;
-    const slots = state.overrides.sessions[sessKey].customWeather;
-    grid.innerHTML = '';
-    for (let i = 0; i < 5; i++) {
-        const slot = slots[i] || { sky: 0, rainChance: 0, temperature: 22 };
-        const cell = document.createElement('div');
-        cell.className = 'slot-cell';
-        cell.innerHTML = `
-            <div class="slot-label">Slot ${i + 1}</div>
-            <select data-slot-field="sky" data-slot-index="${i}">
-                ${SKY_OPTIONS.map(([v, l]) => `<option value="${v}"${v === slot.sky ? ' selected' : ''}>${l}</option>`).join('')}
-            </select>
-            <input type="number" min="0" max="100" step="5" data-slot-field="rainChance" data-slot-index="${i}" value="${slot.rainChance}" placeholder="Rain %" />
-            <input type="number" min="-10" max="50" step="1" data-slot-field="temperature" data-slot-index="${i}" value="${slot.temperature}" placeholder="Temp °C" />
-        `;
-        cell.querySelectorAll('select, input').forEach((inp) => {
-            inp.addEventListener('change', () => {
-                const idx = Number(inp.dataset.slotIndex);
-                const field = inp.dataset.slotField;
-                state.overrides.sessions[sessKey].customWeather[idx][field] = Number(inp.value);
-                updateSummary();
-            });
-        });
-        grid.appendChild(cell);
-    }
-}
-
-function renderAllSlotGrids() {
-    ['practice', 'qualifying', 'race'].forEach(renderSlotGrid);
-}
-
-// ───────── Preset Management ─────────
-const PRESET_CAP = 50;
-
-async function loadPresets() {
-    const arr = await window.go.getSetting('customWeatherPresets');
-    return Array.isArray(arr) ? arr : [];
-}
-
-async function savePresets(arr) {
-    // FIFO trim if over cap (drops oldest first)
-    const trimmed = arr.length > PRESET_CAP ? arr.slice(arr.length - PRESET_CAP) : arr;
-    await window.go.setSetting('customWeatherPresets', trimmed);
-}
-
-function snapshotCurrentCustom() {
-    return {
-        practice:   state.overrides.sessions.practice.customWeather.map(s => ({ ...s })),
-        qualifying: state.overrides.sessions.qualifying.customWeather.map(s => ({ ...s })),
-        race:       state.overrides.sessions.race.customWeather.map(s => ({ ...s })),
-    };
-}
-
-async function onSavePreset() {
-    const name = prompt('Name this preset:');
-    if (!name) return;
-    const arr = await loadPresets();
-    arr.push({
-        id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `p-${Date.now()}`,
-        name,
-        createdAt: Date.now(),
-        config: snapshotCurrentCustom(),
-    });
-    await savePresets(arr);
-    logLine(`Saved preset "${name}"`, 'ok');
-}
-
-async function onLoadPreset() {
-    const arr = await loadPresets();
-    if (!arr.length) { alert('No presets saved yet.'); return; }
-    const labels = arr.map((p, i) => `${i + 1}. ${p.name} (${new Date(p.createdAt).toLocaleDateString()})`).join('\n');
-    const choice = prompt(`Load which preset?\n${labels}\n\nEnter number or 'd<num>' to delete:`);
-    if (!choice) return;
-    if (/^d\d+$/i.test(choice)) {
-        const i = Number(choice.slice(1)) - 1;
-        if (i >= 0 && i < arr.length) {
-            if (confirm(`Delete preset "${arr[i].name}"?`)) {
-                arr.splice(i, 1);
-                await savePresets(arr);
-                logLine(`Deleted preset.`, 'ok');
-            }
-        }
-        return;
-    }
-    const idx = Number(choice) - 1;
-    if (idx < 0 || idx >= arr.length) return;
-    const cfg = arr[idx].config;
-    if (cfg.practice)   state.overrides.sessions.practice.customWeather   = cfg.practice;
-    if (cfg.qualifying) state.overrides.sessions.qualifying.customWeather = cfg.qualifying;
-    if (cfg.race)       state.overrides.sessions.race.customWeather       = cfg.race;
-    renderAllSlotGrids();
-    updateSummary();
-    logLine(`Loaded preset "${arr[idx].name}"`, 'ok');
-}
-
-function bindPresetActions() {
-    document.querySelectorAll('[data-action="save-preset"]').forEach((b) => b.addEventListener('click', onSavePreset));
-    document.querySelectorAll('[data-action="load-preset"]').forEach((b) => b.addEventListener('click', onLoadPreset));
 }
 
 // ───────── Launch ─────────
@@ -736,9 +1269,10 @@ async function onLaunch() {
     };
 
     $('launchBtn').disabled = true;
-    $('log').innerHTML = '';
-    $('log').classList.remove('hidden');
-    $('logToggle').classList.add('open');
+    const log = $('log');
+    if (log) { log.innerHTML = ''; log.classList.remove('hidden'); }
+    const logToggle = $('logToggle');
+    if (logToggle) logToggle.classList.add('open');
     logLine(`Launching with "${payload.overrides.sessions?.practice?.weatherPreset ?? 'dry'}" preset…`, 'ok');
 
     try {
@@ -918,20 +1452,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch {}
     })();
 
-    // Sessions panel — per-session inputs, enable toggles, weather pills
-    bindAllSessionInputs();
-    bindEnableToggles();
-    bindWeatherPresetPills();
-    renderAllSlotGrids();
-    bindPresetActions();
-
-    // Defaults panel — weekend-wide rules + tyres
-    bindRange('timeScale', 'timeScale', formatTimeScale);
-    bindRange('trackLimitsPoints', 'trackLimitsPoints', (v) => String(v));
-    bindSelect('flagRules', 'flagRules', Number);
-    bindSelect('trackLimitsRules', 'trackLimitsRules', Number);
-    bindSelect('mechanicalFailures', 'mechanicalFailures', Number);
-    bindCheckbox('tireWarmers', 'tireWarmers');
+    // Sessions v3 — render cards and bind all interactions
+    renderAllSessions();
+    initPresetBar();
+    initRulesModal();
 
     // Track → layout cascade
     $('trackSelect').addEventListener('change', populateLayoutSelect);
@@ -981,14 +1505,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Launch + log toggle
+    // Launch button
     $('launchBtn').addEventListener('click', onLaunch);
-    $('logToggle').addEventListener('click', () => {
-        const log = $('log');
-        const open = !log.classList.contains('hidden');
-        log.classList.toggle('hidden', open);
-        $('logToggle').classList.toggle('open', !open);
-    });
+    // Log toggle (optional — may not be in v3 layout)
+    const logToggleBtn = $('logToggle');
+    if (logToggleBtn) {
+        logToggleBtn.addEventListener('click', () => {
+            const log = $('log');
+            if (!log) return;
+            const open = !log.classList.contains('hidden');
+            log.classList.toggle('hidden', open);
+            logToggleBtn.classList.toggle('open', !open);
+        });
+    }
 
     // Live log feed from main process.
     window.go.onLog((line) => {

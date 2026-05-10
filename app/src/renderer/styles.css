@@ -2240,18 +2240,20 @@ body[data-drama="hero"] .panel-launch::after {
   padding: 4px 0;
 }
 /* Toggle switch used in session heads */
-.s-switch {
+/* sess-switch: <label>-wrapping-<input type=checkbox> toggle for session enable.
+   Distinct from .s-switch (Bucket A's div-with-::after watcher toggle). */
+.sess-switch {
   display: inline-flex;
   align-items: center;
   cursor: pointer;
 }
-.s-switch input {
+.sess-switch input {
   position: absolute;
   opacity: 0;
   width: 0;
   height: 0;
 }
-.s-switch-track {
+.sess-switch-track {
   width: 34px;
   height: 18px;
   border-radius: 9px;
@@ -2259,10 +2261,10 @@ body[data-drama="hero"] .panel-launch::after {
   position: relative;
   transition: background 0.15s;
 }
-.s-switch input:checked + .s-switch-track {
+.sess-switch input:checked + .sess-switch-track {
   background: var(--accent, #ff4646);
 }
-.s-switch-thumb {
+.sess-switch-thumb {
   position: absolute;
   top: 2px;
   left: 2px;
@@ -2272,6 +2274,6 @@ body[data-drama="hero"] .panel-launch::after {
   background: #fff;
   transition: transform 0.15s;
 }
-.s-switch input:checked + .s-switch-track .s-switch-thumb {
+.sess-switch input:checked + .sess-switch-track .sess-switch-thumb {
   transform: translateX(16px);
 }

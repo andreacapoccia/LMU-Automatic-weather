@@ -774,7 +774,9 @@ function bindSessionCards() {
                     activeSlot.querySelector('.wx-slot-icon').innerHTML = skyIcon(idx);
                     ed.querySelector('[data-slot-skyname]').textContent = SKY_OPTS[idx];
                     const sk = card.dataset.session;
-                    state.overrides.sessions[sk].customWeather[+activeSlot.dataset.slot].sky = idx;
+                    const slotIdx = +activeSlot.dataset.slot;
+                    state.overrides.sessions[sk].customWeather[slotIdx].sky = idx;
+                    applyRainAvailability(ed, idx, sk, slotIdx);
                     setDirty(true);
                     updateSummary();
                 }
@@ -918,7 +920,36 @@ function openEditor(slotEl) {
     editor.querySelector('[data-rain-val]').innerHTML = slotData.rainChance + '<span class="unit">%</span>';
     updateRangeFill(rainIn);
 
+    applyRainAvailability(editor, slotData.sky, sk, idx);
+
     editor.classList.add('open');
+}
+
+// Sky values 0..4 (Clear → Overcast) are dry by definition — disable
+// the rain-chance slider and force the slot to 0% rain. Slider becomes
+// editable again from value 5 (Cloudy & drizzle) onwards.
+function applyRainAvailability(editor, sky, sessKey, slotIdx) {
+    const rainIn = editor.querySelector('[data-edit="rain"]');
+    if (!rainIn) return;
+    const rainNum = rainIn.closest('.wxe-num');
+    const allowed = Number(sky) >= 5;
+    rainIn.disabled = !allowed;
+    if (rainNum) rainNum.classList.toggle('is-disabled', !allowed);
+    if (!allowed) {
+        rainIn.value = 0;
+        editor.querySelector('[data-rain-val]').innerHTML = '0<span class="unit">%</span>';
+        updateRangeFill(rainIn);
+        if (sessKey != null && slotIdx != null) {
+            const slot = state.overrides.sessions[sessKey]?.customWeather?.[slotIdx];
+            if (slot && slot.rainChance !== 0) {
+                slot.rainChance = 0;
+                const card = editor.closest('.session-card');
+                const slotEl = card?.querySelector(`.wx-slot[data-slot="${slotIdx}"]`);
+                if (slotEl) slotEl.querySelector('.wx-slot-rain').textContent = '0%';
+                updateSummary();
+            }
+        }
+    }
 }
 
 // ───────── Preset Management (file-based IPC) ─────────

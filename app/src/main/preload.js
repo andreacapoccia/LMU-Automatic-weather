@@ -33,4 +33,6 @@ contextBridge.exposeInMainWorld('go', {
     setSetting: (key, value) => ipcRenderer.invoke('settings:set', key, value),
     getDefaultWatchPath: () => ipcRenderer.invoke('app:getDefaultWatchPath'),
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
+    openLogsFolder: () => ipcRenderer.invoke('app:openLogsFolder'),
+    resetAllSettings: () => ipcRenderer.invoke('settings:resetAll'),
 });

@@ -910,6 +910,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // Install pill
     $('installPillChange').addEventListener('click', pickInstallPath);
 
+    // Open logs folder button
+    const openLogsBtn = $('openLogsFolder');
+    if (openLogsBtn) openLogsBtn.addEventListener('click', async () => {
+        try { await window.go.openLogsFolder(); } catch (e) { logLine(`Open logs failed: ${e.message}`, 'err'); }
+    });
+
+    // Reset settings button
+    const resetBtn = $('resetSettings');
+    if (resetBtn) resetBtn.addEventListener('click', async () => {
+        if (!confirm('Reset all settings? This will not delete telemetry files.')) return;
+        try {
+            await window.go.resetAllSettings();
+            window.location.reload();
+        } catch (e) {
+            logLine(`Reset failed: ${e.message}`, 'err');
+        }
+    });
+
     // Launch + log toggle
     $('launchBtn').addEventListener('click', onLaunch);
     $('logToggle').addEventListener('click', () => {

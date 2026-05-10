@@ -39,4 +39,14 @@ function set(key, value) {
     return write(all);
 }
 
-module.exports = { read, write, get, set };
+function resetAll() {
+    try {
+        fs.unlinkSync(settingsPath());
+        return true;
+    } catch (e) {
+        if (e.code === 'ENOENT') return true;  // already clean
+        return false;
+    }
+}
+
+module.exports = { read, write, get, set, resetAll };

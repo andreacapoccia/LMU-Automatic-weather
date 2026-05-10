@@ -289,6 +289,18 @@ ipcMain.handle('convert:delete', async (_e, ldPath) => {
     return { ok: true };
 });
 
+ipcMain.handle('app:openLogsFolder', async () => {
+    const dir = path.join(app.getPath('userData'), 'logs');
+    fs.mkdirSync(dir, { recursive: true });
+    const err = await shell.openPath(dir);
+    return err ? { ok: false, error: err } : { ok: true };
+});
+
+ipcMain.handle('settings:resetAll', () => {
+    settings.resetAll();
+    return { ok: true };
+});
+
 ipcMain.handle('settings:get', (_e, key) => settings.get(key));
 ipcMain.handle('settings:set', (_e, key, value) => {
     settings.set(key, value);

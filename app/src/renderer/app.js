@@ -30,7 +30,7 @@ const state = {
         // the rest; UI for these is removed in Task 7.
         waterDepth: -0.01,
         tireWarmers: true,
-        timeScale: 1,                   // Normal real time
+        timeScale: 0,                   // None
         flagRules: 3,                   // Full w/o DQ
         trackLimitsRules: 1,            // Default
         trackLimitsPoints: 5,
@@ -1147,7 +1147,7 @@ function initPresetBar() {
 }
 
 // ───────── Rules modal ─────────
-const RULES_DEFAULTS = { timeScale: 1, flagRules: '3', trackLimitsRules: '1', trackLimitsPoints: 5, mechanicalFailures: '1', tireWarmers: true };
+const RULES_DEFAULTS = { timeScale: 0, flagRules: '3', trackLimitsRules: '1', trackLimitsPoints: 5, mechanicalFailures: '1', tireWarmers: true };
 const TIME_SCALE_LABELS = ['None', 'Normal', '×2'];
 
 function initRulesModal() {
@@ -1681,8 +1681,8 @@ async function initDrawer() {
         browseWs.addEventListener('click', async () => {
             try {
                 const result = await window.go.pickFile({
-                    title: 'Select MoTeC workspace (.w2k)',
-                    filters: [{ name: 'MoTeC workspace', extensions: ['w2k'] }],
+                    title: 'Select MoTeC workspace',
+                    filters: [{ name: 'MoTeC workspace', extensions: ['w2k', 'i2wsp'] }],
                 });
                 if (result.canceled) return;
                 $('setMotecWorkspace').value = result.path;

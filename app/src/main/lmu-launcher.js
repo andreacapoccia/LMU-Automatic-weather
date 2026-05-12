@@ -36,7 +36,7 @@ const DEFAULT_OVERRIDES = {
     tireWarmers: true,
 
     // GO Setups standard session rules (overridable from UI):
-    timeScale: 1,                   // 1 = Normal real time (was 0=None pre-v3.0.4)
+    timeScale: 0,                   // 0 = None (no time compression)
     flagRules: 3,                   // 0=None 1=Penalties 2=Penalties+FCY 3=Full w/o DQ (per LMU's settings.json comment)
     trackLimitsRules: 1,            // 0=None 1=Default 2=Strict 3=Relaxed
     trackLimitsPoints: 5,           // 0..63
@@ -157,16 +157,21 @@ function matchTrack(liveList, picked) {
         if (candidates.length === 1) return candidates[0];
 
         if (layout && candidates.length > 0) {
-            // Score by how many characters of the layout token are present.
+            // Score by layout token presence in the suffix AFTER the location token.
+            // This prevents false matches when the location token itself contains the
+            // layout token (e.g. "COTA" in "COTAWEC" scoring both GP and National).
             let best = null;
             let bestScore = -1;
             for (const c of candidates) {
                 const sd = norm(c.sceneDesc);
+                const locIdx = sd.indexOf(loc);
+                const suffix = locIdx >= 0 ? sd.slice(locIdx + loc.length) : sd;
                 let score = 0;
-                if (sd.includes(layout)) score += 100;
-                // Per-character bonus for partial matches.
+                if (suffix.includes(layout)) score += 200;
+                else if (sd.includes(layout)) score += 50;
+                // Per-character bonus for partial suffix matches.
                 for (let i = 0; i < layout.length; i++) {
-                    if (sd.includes(layout.slice(i))) {
+                    if (suffix.includes(layout.slice(i))) {
                         score += layout.length - i;
                         break;
                     }

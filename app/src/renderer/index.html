@@ -184,8 +184,8 @@
       <div class="rules-group">
         <div class="rules-group-title">Timing</div>
         <label class="field">
-          <span class="field-label">Time scale <em id="timeScaleVal">Normal</em></span>
-          <input id="timeScale" type="range" min="0" max="2" step="1" value="1" />
+          <span class="field-label">Time scale <em id="timeScaleVal">None</em></span>
+          <input id="timeScale" type="range" min="0" max="2" step="1" value="0" />
           <span class="field-hint">How fast in-game time passes vs real time</span>
         </label>
       </div>
@@ -196,10 +196,10 @@
           <label class="field">
             <span class="field-label">Flag rules</span>
             <select id="flagRules" class="select">
-              <option value="3">Full w/o DQ</option>
-              <option value="2">Penalties &amp; FCY</option>
-              <option value="1">Penalties only</option>
               <option value="0">None</option>
+              <option value="1">Black Only</option>
+              <option value="2">Full</option>
+              <option value="3" selected>Full w/o DQ</option>
             </select>
           </label>
           <label class="field">
@@ -589,11 +589,11 @@
           <div class="setting-row">
             <div class="setting-label">
               <span class="lbl">Workspace file</span>
-              <span class="hint">Optional <code style="font-family:'JetBrains Mono',monospace;">.w2k</code> workspace to load with each session.</span>
+              <span class="hint">Optional <code style="font-family:'JetBrains Mono',monospace;">.w2k</code> or <code style="font-family:'JetBrains Mono',monospace;">.i2wsp</code> workspace to load with each session.</span>
             </div>
             <div class="s-path-row">
               <input class="s-input mono" id="setMotecWorkspace" value="" readonly />
-              <button class="s-btn" id="browseMotecWorkspace">Choose .w2k…</button>
+              <button class="s-btn" id="browseMotecWorkspace">Choose…</button>
             </div>
           </div>
         </div>

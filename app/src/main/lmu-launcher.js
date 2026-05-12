@@ -457,6 +457,10 @@ async function launchSession({ track, overrides, emit }) {
         throw new Error("Couldn't reach LMU main menu within timeout.");
     }
 
+    // Capture car selection NOW — before setTrack clears loadingData.selectedCar.
+    const live = await getCurrentSelection();
+    if (live?.vehicle) log(`Using player-selected car: ${live.vehicle}`);
+
     log('Fetching track list from LMU…');
     const tracks = await fetchTrackList();
     const match = matchTrack(tracks, track);
@@ -472,8 +476,6 @@ async function launchSession({ track, overrides, emit }) {
 
     log('Reading current session preset…');
     const preset = await requestPreset();
-    const live = await getCurrentSelection();
-    if (live?.vehicle) log(`Using player-selected car: ${live.vehicle}`);
 
     log(`Composing session with weather preset "${overrides?.sessions?.practice?.weatherPreset ?? overrides?.weatherPreset ?? 'dry'}"…`);
     const body = composeSession({ presetJson: preset, liveSelection: live, overrides });

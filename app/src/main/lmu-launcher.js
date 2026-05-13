@@ -360,6 +360,9 @@ function composeSession({ presetJson, liveSelection, overrides }) {
     if (sp.Player['Mechanical Failures']) {
         sp.Player['Mechanical Failures']['Failure Rate'] = Number(o.mechanicalFailures);
     }
+    if (o.mechanicalFailures === 0) {
+        sp.Player['Game Options']['Damage Multiplier'] = 0;
+    }
 
     // Apply RealRoad / wet to all 3 sessions inside SessionPreset.Weather.
     for (const session of ['Practice', 'Qualifying', 'Race']) {

@@ -1241,10 +1241,13 @@ function initRulesModal() {
     }
 
     [elTimeScale, elFlagRules, elTrackLimitsRules, elTrackLimitsPoints, elMechFail, elTireWarmers].forEach((el) => {
-        if (el) el.addEventListener('input', syncRulesUI);
+        if (el) {
+            el.addEventListener('input', syncRulesUI);
+            el.addEventListener('change', syncRulesUI);
+        }
     });
 
-    rulesBtn.addEventListener('click', () => { rulesOverlay.hidden = false; });
+    rulesBtn.addEventListener('click', () => { rulesOverlay.hidden = false; syncRulesUI(); });
 
     function closeRules() { rulesOverlay.hidden = true; }
     if (rulesClose) rulesClose.addEventListener('click', closeRules);
@@ -1279,9 +1282,11 @@ async function onLaunch() {
             layoutToken: layoutOpt ? layoutOpt.dataset.layoutToken || null : null,
             label: trackOpt ? trackOpt.textContent : '',
         },
-        overrides: { ...state.overrides },
+        overrides: {
+            ...state.overrides,
+            mechanicalFailures: Number($('mechanicalFailures')?.value ?? state.overrides.mechanicalFailures),
+        },
     };
-
     $('launchBtn').disabled = true;
     const log = $('log');
     if (log) { log.innerHTML = ''; log.classList.remove('hidden'); }

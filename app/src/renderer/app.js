@@ -235,7 +235,7 @@ async function refreshLiveTracks() {
                     if (suffix === lay) score += 300;
                     else if (suffix.includes(lay)) score += 200;
                     else if (sd.includes(lay)) score += 50;
-                    if (suffix === '') score += 10;
+                    if (suffix === '' && loc.includes(lay)) score += 10;
                     if (score > bestScore) { bestScore = score; best = c; }
                 }
                 live = best;

@@ -176,7 +176,7 @@ function matchTrack(liveList, picked) {
                 if (suffix === layout) score += 300;
                 else if (suffix.includes(layout)) score += 200;
                 else if (sd.includes(layout)) score += 50;
-                if (suffix === '') score += 10; // base layout tie-breaker
+                if (suffix === '' && loc.includes(layout)) score += 10; // base layout tie-breaker when layout token is embedded in location token (e.g. COTA ⊂ COTAWEC)
                 // Per-character bonus for partial suffix matches.
                 for (let i = 0; i < layout.length; i++) {
                     if (suffix.includes(layout.slice(i))) {

@@ -167,6 +167,7 @@ function matchTrack(liveList, picked) {
             // the location token itself (COTA ⊂ COTAWEC).
             let best = null;
             let bestScore = -1;
+            const scoreLog = [];
             for (const c of candidates) {
                 const sd = norm(c.sceneDesc);
                 const locIdx = sd.indexOf(loc);

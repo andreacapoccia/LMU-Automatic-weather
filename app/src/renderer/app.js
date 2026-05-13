@@ -215,13 +215,31 @@ async function refreshLiveTracks() {
         for (const t of state.install.tracks) {
             const loc = (t.locationToken || '').toUpperCase();
             const lay = (t.layoutToken || '').toUpperCase();
+            const normSd = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
             const candidates = [...seen.values()].filter((live) => {
-                const sd = String(live.sceneDesc || '')
-                    .toUpperCase()
-                    .replace(/[^A-Z0-9]/g, '');
-                return sd.includes(loc) && (!lay || sd.includes(lay));
+                const sd = normSd(live.sceneDesc);
+                return sd.includes(loc);
             });
-            const live = candidates[0];
+            // Pick best candidate using suffix scoring so e.g. COTAWEC (GP, empty suffix)
+            // beats COTAWEC_NATIONAL when matching the COTA layout token.
+            let live = null;
+            if (candidates.length === 1) {
+                live = candidates[0];
+            } else if (candidates.length > 1) {
+                let best = null, bestScore = -1;
+                for (const c of candidates) {
+                    const sd = normSd(c.sceneDesc);
+                    const locIdx = sd.indexOf(loc);
+                    const suffix = locIdx >= 0 ? sd.slice(locIdx + loc.length) : sd;
+                    let score = 0;
+                    if (suffix === lay) score += 300;
+                    else if (suffix.includes(lay)) score += 200;
+                    else if (sd.includes(lay)) score += 50;
+                    if (suffix === '') score += 10;
+                    if (score > bestScore) { bestScore = score; best = c; }
+                }
+                live = best;
+            }
             if (live) {
                 merged.push({ ...t, id: live.id, sceneDesc: live.sceneDesc });
                 seen.delete(live.sceneDesc);

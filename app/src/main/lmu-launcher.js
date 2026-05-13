@@ -343,6 +343,14 @@ function composeSession({ presetJson, liveSelection, overrides }) {
         sp.Player['Race Conditions'][rrField] = Number(ss.realRoadTimeScale ?? 0);
     }
 
+    // Enable / disable sessions via LMU's session-count fields.
+    // Num Qual Sessions: 0=disabled, 1=run qualifying.
+    // Num Race Sessions: 0=disabled, 1=run race.
+    // Run Practice1: true/false controls whether practice session 1 runs.
+    sp.Player['Race Conditions']['Run Practice1']    = sessions.practice?.enabled   !== false;
+    sp.Player['Race Conditions']['Num Qual Sessions'] = sessions.qualifying?.enabled !== false ? 1 : 0;
+    sp.Player['Race Conditions']['Num Race Sessions'] = sessions.race?.enabled       !== false ? 1 : 0;
+
     // Race start type — Race only.
     // LMU enum (INFERRED — not present in template): 0=Standing, 1=Rolling, 2=FastRolling.
     // We only ship 'rolling' and 'fast_rolling' from the renderer (no Standing UI).

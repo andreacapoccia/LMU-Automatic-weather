@@ -48,6 +48,8 @@ const state = {
 // ───────── Helpers ─────────
 const $ = (id) => document.getElementById(id);
 
+let liveryNames = {}; // { [carId]: customDisplayName } — persisted in settings
+
 function logLine(line, kind = '') {
     const log = $('log');
     if (!log) { console[kind === 'err' ? 'error' : 'log']('[GO]', line); return; }
@@ -334,11 +336,12 @@ async function refreshLiveCars(force = false) {
 
     const cars = [];
     for (const c of result.cars) {
-        if (c.owned === false) continue;
+        if (c.owned === false && !c.locallyInstalled) continue;
         const parts = parseCarPath(c.fullPathTree);
         if (parts.length < 3) continue;
-        const dn = c.displayProperties?.displayName || stripVersion(c.name);
-        const vm = getVirtualModel(parts[2], dn);
+        const baseDn = c.displayProperties?.displayName || stripVersion(c.name);
+        const dn = (c.locallyInstalled && liveryNames[c.id]) ? liveryNames[c.id] : baseDn;
+        const vm = getVirtualModel(parts[2], baseDn);
         cars.push({
             id: c.id,
             class: normalizeClass(parts[1]),
@@ -348,6 +351,7 @@ async function refreshLiveCars(force = false) {
             series: parts[0],
             name: stripVersion(c.name),
             displayName: dn,
+            locallyInstalled: !!c.locallyInstalled,
         });
     }
     state.cars = cars;
@@ -441,7 +445,15 @@ function populateLiveryDropdown() {
         state.overrides.vehicleString = null;
     }
     rebuildCdd(sel);
+    syncRenameLiveryBtn();
     updateSummary();
+}
+
+function syncRenameLiveryBtn() {
+    const btn = $('renameLivery');
+    if (!btn) return;
+    const sel = $('carLiverySelect');
+    btn.style.display = sel?.value ? '' : 'none';
 }
 
 function setAutoDetect(enabled) {
@@ -1471,6 +1483,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch {}
     })();
 
+    // Load persisted livery name overrides
+    (async () => {
+        const saved = await window.go.getSetting('liveryNames');
+        if (saved && typeof saved === 'object') liveryNames = saved;
+    })();
+
     // Sessions v3 — render cards and bind all interactions
     renderAllSessions();
     initPresetBar();
@@ -1489,9 +1507,56 @@ document.addEventListener('DOMContentLoaded', () => {
     $('carLiverySelect').addEventListener('change', () => {
         setAutoDetect(false);
         state.overrides.vehicleString = $('carLiverySelect').value || null;
+        $('renameLiveryInline').style.display = 'none';
+        syncRenameLiveryBtn();
         updateSummary();
     });
     $('autoDetectCar').addEventListener('click', () => setAutoDetect(true));
+    $('renameLivery').addEventListener('click', () => {
+        const sel = $('carLiverySelect');
+        const car = state.cars.find((c) => c.name === sel?.value);
+        if (!car) return;
+        $('renameLiveryInput').value = liveryNames[car.id] || car.displayName;
+        $('renameLivery').style.display = 'none';
+        const inline = $('renameLiveryInline');
+        inline.style.display = 'inline-flex';
+        $('renameLiveryInput').focus();
+        $('renameLiveryInput').select();
+    });
+
+    async function applyLiveryRename() {
+        const sel = $('carLiverySelect');
+        const car = state.cars.find((c) => c.name === sel?.value);
+        const inline = $('renameLiveryInline');
+        inline.style.display = 'none';
+        if (!car) return;
+        const newName = $('renameLiveryInput').value.trim();
+        if (newName) {
+            liveryNames[car.id] = newName;
+        } else {
+            delete liveryNames[car.id];
+        }
+        await window.go.setSetting('liveryNames', liveryNames);
+        const carInState = state.cars.find((c) => c.id === car.id);
+        if (carInState) carInState.displayName = liveryNames[car.id] || carInState.displayName;
+        const prevVal = sel.value;
+        populateLiveryDropdown();
+        sel.value = prevVal;
+        state.overrides.vehicleString = prevVal || null;
+        rebuildCdd(sel);
+        syncRenameLiveryBtn();
+        updateSummary();
+    }
+
+    $('renameLiverySave').addEventListener('click', applyLiveryRename);
+    $('renameLiveryCancel').addEventListener('click', () => {
+        $('renameLiveryInline').style.display = 'none';
+        syncRenameLiveryBtn();
+    });
+    $('renameLiveryInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') applyLiveryRename();
+        if (e.key === 'Escape') { $('renameLiveryInline').style.display = 'none'; syncRenameLiveryBtn(); }
+    });
     $('refreshCars').addEventListener('click', async () => {
         $('autoDetectLabel').textContent = 'Refreshing…';
         await refreshLiveCars(true);

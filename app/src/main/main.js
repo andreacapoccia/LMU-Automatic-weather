@@ -119,7 +119,14 @@ ipcMain.handle('lmu:fetchCars', async () => {
         const r = await fetch('http://localhost:6397/rest/race/car');
         if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
         const list = await r.json();
-        return { ok: true, cars: list };
+        const annotated = list.map((c) => {
+            if (c.owned !== false) return c;
+            // VEH files for custom liveries live inside .mas archives (not loose files).
+            // If LMU reports a vehFile path the livery is installed in its virtual FS.
+            if (c.vehFile) return { ...c, locallyInstalled: true };
+            return c;
+        });
+        return { ok: true, cars: annotated };
     } catch (e) {
         return { ok: false, error: e.message };
     }

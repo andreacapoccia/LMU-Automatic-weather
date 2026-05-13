@@ -184,6 +184,7 @@ function matchTrack(liveList, picked) {
                         break;
                     }
                 }
+                if (loc === layout) score -= suffix.length;
                 if (score > bestScore) {
                     bestScore = score;
                     best = c;

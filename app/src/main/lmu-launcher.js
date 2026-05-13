@@ -157,9 +157,14 @@ function matchTrack(liveList, picked) {
         if (candidates.length === 1) return candidates[0];
 
         if (layout && candidates.length > 0) {
-            // Score by layout token presence in the suffix AFTER the location token.
-            // This prevents false matches when the location token itself contains the
-            // layout token (e.g. "COTA" in "COTAWEC" scoring both GP and National).
+            // Score using the suffix AFTER the location token in each sceneDesc.
+            // e.g. "COTAWEC_NATIONAL" → suffix "NATIONAL"; "COTAWEC" → suffix ""
+            // Priority: exact suffix match (300) > suffix contains layout (200) >
+            //           layout in full sceneDesc (50) > empty suffix tie-breaker (10).
+            // The empty-suffix tie-breaker handles the common case where the base/GP
+            // layout has no extra suffix (e.g. "COTAWEC") while named variants do
+            // (e.g. "COTAWEC_NATIONAL"), and the layout token is ambiguously part of
+            // the location token itself (COTA ⊂ COTAWEC).
             let best = null;
             let bestScore = -1;
             for (const c of candidates) {
@@ -167,8 +172,10 @@ function matchTrack(liveList, picked) {
                 const locIdx = sd.indexOf(loc);
                 const suffix = locIdx >= 0 ? sd.slice(locIdx + loc.length) : sd;
                 let score = 0;
-                if (suffix.includes(layout)) score += 200;
+                if (suffix === layout) score += 300;
+                else if (suffix.includes(layout)) score += 200;
                 else if (sd.includes(layout)) score += 50;
+                if (suffix === '') score += 10; // base layout tie-breaker
                 // Per-character bonus for partial suffix matches.
                 for (let i = 0; i < layout.length; i++) {
                     if (suffix.includes(layout.slice(i))) {
@@ -463,14 +470,25 @@ async function launchSession({ track, overrides, emit }) {
 
     log('Fetching track list from LMU…');
     const tracks = await fetchTrackList();
+    writeDebug('track-list.json', JSON.stringify(tracks, null, 2));
+    const normFn = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const locNorm = normFn(track.locationToken);
+    const candidates = locNorm ? tracks.filter((t) => normFn(t.sceneDesc).includes(locNorm)) : [];
+    writeDebug('track-match.txt', [
+        `Wanted: locationToken=${track.locationToken} layoutToken=${track.layoutToken}`,
+        `Candidates (${candidates.length}): ${candidates.map((t) => `${t.sceneDesc} (id=${t.id})`).join(' | ')}`,
+    ].join('\n'));
     const match = matchTrack(tracks, track);
     if (!match) {
         throw new Error(
             `Couldn't find a matching track for "${track.label || track.locationToken}/${track.layoutToken || ''}" in LMU's list.`,
         );
     }
-
-    log(`Selecting track: ${match.sceneDesc}`);
+    writeDebug('track-match.txt', [
+        `Wanted: locationToken=${track.locationToken} layoutToken=${track.layoutToken}`,
+        `Candidates (${candidates.length}): ${candidates.map((t) => `${t.sceneDesc} (id=${t.id})`).join(' | ')}`,
+        `Matched: ${match.sceneDesc} (id=${match.id})`,
+    ].join('\n'));
     await setTrack(match.id);
     await sleep(500);
 

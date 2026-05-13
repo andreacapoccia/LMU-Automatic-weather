@@ -477,7 +477,8 @@ async function launchSession({ track, overrides, emit }) {
     const locNorm = normFn(track.locationToken);
     const candidates = locNorm ? tracks.filter((t) => normFn(t.sceneDesc).includes(locNorm)) : [];
     writeDebug('track-match.txt', [
-        `Wanted: locationToken=${track.locationToken} layoutToken=${track.layoutToken}`,
+        `Wanted: folder=${track.folder} layoutStem=${track.layoutStem} label=${track.label}`,
+        `        locationToken=${track.locationToken} layoutToken=${track.layoutToken}`,
         `Candidates (${candidates.length}): ${candidates.map((t) => `${t.sceneDesc} (id=${t.id})`).join(' | ')}`,
     ].join('\n'));
     const match = matchTrack(tracks, track);
@@ -487,7 +488,8 @@ async function launchSession({ track, overrides, emit }) {
         );
     }
     writeDebug('track-match.txt', [
-        `Wanted: locationToken=${track.locationToken} layoutToken=${track.layoutToken}`,
+        `Wanted: folder=${track.folder} layoutStem=${track.layoutStem} label=${track.label}`,
+        `        locationToken=${track.locationToken} layoutToken=${track.layoutToken}`,
         `Candidates (${candidates.length}): ${candidates.map((t) => `${t.sceneDesc} (id=${t.id})`).join(' | ')}`,
         `Matched: ${match.sceneDesc} (id=${match.id})`,
     ].join('\n'));

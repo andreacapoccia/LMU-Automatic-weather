@@ -236,6 +236,9 @@ async function refreshLiveTracks() {
                     else if (suffix.includes(lay)) score += 200;
                     else if (sd.includes(lay)) score += 50;
                     if (suffix === '' && loc.includes(lay)) score += 10;
+                    for (let i = 0; i < lay.length; i++) {
+                        if (suffix.includes(lay.slice(i))) { score += lay.length - i; break; }
+                    }
                     if (score > bestScore) { bestScore = score; best = c; }
                 }
                 live = best;

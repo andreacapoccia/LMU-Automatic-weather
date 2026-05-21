@@ -1,6 +1,8 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('go', {
+    // Electron 32+ removed File.path; use webUtils.getPathForFile on drop.
+    getPathForFile: (file) => webUtils.getPathForFile(file),
     scanInstall: () => ipcRenderer.invoke('install:scan'),
     pickInstallPath: () => ipcRenderer.invoke('install:pickPath'),
     resetInstallPath: () => ipcRenderer.invoke('install:resetPath'),

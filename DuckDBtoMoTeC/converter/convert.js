@@ -41,6 +41,25 @@ function applyNamingTemplate(template, inputPath, meta) {
   return out || null;
 }
 
+// Fastest lap from successive S/F crossings in session.laps ({ts, lapNum}).
+// Returns the smallest gap in seconds, or null if fewer than 2 crossings.
+function fastestLapSeconds(laps) {
+  if (!Array.isArray(laps) || laps.length < 2) return null;
+  let best = Infinity;
+  for (let i = 1; i < laps.length; i++) {
+    const dt = laps[i].ts - laps[i - 1].ts;
+    if (dt > 0 && dt < best) best = dt;
+  }
+  return isFinite(best) ? best : null;
+}
+
+function formatLapTime(sec) {
+  if (sec == null || !isFinite(sec)) return null;
+  const m = Math.floor(sec / 60);
+  const s = sec - m * 60;
+  return `${m}:${s.toFixed(3).padStart(6, '0')}`;
+}
+
 async function convert(inputPath, outputDir, namingTemplate) {
   log({ type: 'start', file: inputPath });
 
@@ -56,7 +75,25 @@ async function convert(inputPath, outputDir, namingTemplate) {
   log({ type: 'progress', step: 'ld', path: ldPath });
 
   writeLDX(ldxPath, session);
-  log({ type: 'done', ld: ldPath, ldx: ldxPath });
+
+  const meta = session.meta || {};
+  const fastestSec = fastestLapSeconds(session.laps);
+  log({
+    type: 'done',
+    ld: ldPath,
+    ldx: ldxPath,
+    meta: {
+      track: meta.TrackName || '',
+      layout: meta.SessionConfig || meta.Layout || '',
+      car: meta.CarName || '',
+      carClass: meta.CarClass || '',
+      driver: meta.DriverName || '',
+      session: meta.SessionType || '',
+      laps: session.laps.length,
+      fastestSec,
+      fastest: formatLapTime(fastestSec),
+    },
+  });
 }
 
 if (require.main === module) {

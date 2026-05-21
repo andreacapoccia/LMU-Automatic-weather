@@ -1927,8 +1927,11 @@ async function initTelemetry() {
             dz.classList.remove('is-drag');
             if (ev === 'drop' && e.dataTransfer.files.length) {
                 const file = e.dataTransfer.files[0];
-                if (file.path && file.path.endsWith('.duckdb')) {
-                    runConversion(file.path);
+                const filePath = window.go.getPathForFile(file);
+                if (filePath && filePath.endsWith('.duckdb')) {
+                    runConversion(filePath);
+                } else {
+                    logLine(`Dropped file isn't a .duckdb: ${file.name}`, 'err');
                 }
             }
         }));
@@ -2007,7 +2010,7 @@ async function initTelemetry() {
         try {
             const msg = JSON.parse(line);
             if (msg.type === 'done') {
-                if (msg.ld) addSession(msg.ld, 'ok');
+                if (msg.ld) addSession(msg.ld, 'ok', msg.meta);
                 showActiveConv(false);
             } else if (msg.type === 'start') {
                 updateActiveConv(0, 'Reading DuckDB');
@@ -2019,6 +2022,7 @@ async function initTelemetry() {
                 updateActiveConv(pct, stage);
             } else if (msg.type === 'error') {
                 if (msg.file) addSession(msg.file, 'err');
+                logLine(`Conversion failed: ${msg.message || 'unknown error'}`, 'err');
                 showActiveConv(false);
             }
         } catch (_) {
@@ -2142,19 +2146,22 @@ async function persistSessions() {
     } catch {}
 }
 
-function addSession(ldPath, status) {
+function addSession(ldPath, status, meta) {
     const existing = tlmState.sessions.findIndex((s) => s.ldPath === ldPath);
     const baseName = ldPath.replace(/\\/g, '/').split('/').pop().replace(/\.ld$/i, '');
     const now = new Date();
+    const m = meta || {};
+    const trackLabel = [m.track, m.layout].filter(Boolean).join(' · ') || baseName;
     const session = {
         ldPath,
         ldxPath: ldPath.replace(/\.ld$/i, '.ldx'),
         baseName,
-        track: baseName,
-        car: '',
-        cls: '',
-        fastest: '—',
-        laps: 0,
+        track: trackLabel,
+        driver: m.driver || '',
+        car: m.car || '',
+        cls: m.carClass || '',
+        fastest: m.fastest || '—',
+        laps: Number(m.laps ?? 0),
         convertedAt: now.getTime(),  // epoch ms — used by today/week filters
         date: now.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
         status,
@@ -2199,11 +2206,13 @@ function renderSessionsGrid() {
         const row = document.createElement('div');
         row.className = 'session-row';
         row.dataset.ldPath = s.ldPath;
+        const title = (s.track && s.track !== s.baseName) ? s.track : s.baseName;
+        const sub = s.driver || s.baseName;
         row.innerHTML = `
             <div class="cell">
                 <div class="cell-track">
-                    <div class="t-name">${s.baseName.replace(/</g,'&lt;')} ${tagFor(s.status)}</div>
-                    <div class="t-sub"><span class="driver">${s.track.replace(/</g,'&lt;') || '—'}</span></div>
+                    <div class="t-name">${title.replace(/</g,'&lt;')} ${tagFor(s.status)}</div>
+                    <div class="t-sub"><span class="driver">${sub.replace(/</g,'&lt;') || '—'}</span></div>
                 </div>
             </div>
             <div class="cell">

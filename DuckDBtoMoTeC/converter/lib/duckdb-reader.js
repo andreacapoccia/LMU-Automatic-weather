@@ -75,6 +75,18 @@ async function readSession(dbPath) {
     const clRows = await query(con, 'SELECT channelName, frequency FROM channelsList');
     const freqMap = Object.fromEntries(clRows.map(r => [r.channelName, r.frequency]));
 
+    // Cache table → column-name set so we can detect schema variants per-table.
+    // LMU has shifted some channels (e.g. TC) between event-stream (ts, value) and
+    // regular 100 Hz tables (value only) across patches, so we ignore the hardcoded
+    // `isEvent` flag and detect dynamically from the actual schema.
+    async function tableColumns(table) {
+      const rows = await query(
+        con,
+        `SELECT column_name FROM information_schema.columns WHERE table_name = '${table.replace(/'/g, "''")}'`
+      );
+      return new Set(rows.map(r => r.column_name));
+    }
+
     // Build channels
     const channels = [];
     for (const ch of CHANNELS) {
@@ -87,7 +99,11 @@ async function readSession(dbPath) {
       );
       if (!Number(existsRaw)) continue;
 
-      const freq = ch.isEvent ? EVENT_STEP_FREQ : (freqMap[table] ?? 100);
+      const cols = await tableColumns(table);
+      const hasTs = cols.has('ts');
+      const isEvent = hasTs && !ch.wheels; // wheels tables never use ts
+
+      const freq = isEvent ? EVENT_STEP_FREQ : (freqMap[table] ?? 100);
 
       if (ch.wheels) {
         const rows = await query(con, `SELECT value1, value2, value3, value4 FROM "${table}"`);
@@ -107,7 +123,7 @@ async function readSession(dbPath) {
             data: raw,
           });
         }
-      } else if (ch.isEvent) {
+      } else if (isEvent) {
         const rows = await query(con, `SELECT ts, value FROM "${table}" ORDER BY ts`);
         const times = rows.map(r => r.ts - sessionStart);
         const values = rows.map(r => (r.value ?? 0) * ch.scale);

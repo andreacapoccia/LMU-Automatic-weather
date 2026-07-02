@@ -1760,6 +1760,8 @@ input[type='range']::-webkit-slider-thumb:hover { transform: scale(1.1); }
     80px                     /* laps */
     140px                    /* date */
     auto;                    /* actions */
+  grid-auto-rows: min-content;  /* row height = content height, never stretches */
+  align-content: start;          /* pack rows at top, leave empty space at bottom */
   align-items: stretch;
   flex: 1; overflow-y: auto; min-height: 0;
 }

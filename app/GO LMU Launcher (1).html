@@ -1,0 +1,1929 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GO LMU Launcher — Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --accent: #FF3B1F;
+  --accent-2: #FF6A4F;
+  --accent-shadow: rgba(255, 59, 31, 0.45);
+  --accent-soft: rgba(255, 59, 31, 0.10);
+  --bg-0: #07070a;
+  --bg-1: #0c0d11;
+  --panel: rgba(22, 23, 28, 0.72);
+  --panel-solid: #16171c;
+  --panel-2: rgba(28, 29, 35, 0.85);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
+  --text: #f1f2f5;
+  --text-2: #c8c9cf;
+  --text-dim: #8b8d96;
+  --text-faint: #56585f;
+  --green: #2bd66a;
+  --amber: #ffb028;
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: var(--bg-0);
+  color: var(--text);
+  font-family: 'Inter Tight', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-feature-settings: 'ss01', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+body { display: flex; flex-direction: column; }
+
+/* ───────── ambient background ───────── */
+.ambient {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(900px 500px at 85% -10%, rgba(255, 59, 31, 0.18), transparent 60%),
+    radial-gradient(700px 500px at -10% 110%, rgba(60, 110, 255, 0.10), transparent 65%),
+    linear-gradient(180deg, #07070a 0%, #0a0a10 100%);
+}
+.ambient::after {
+  content: ''; position: absolute; inset: 0;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 80px),
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 80px);
+  mask: radial-gradient(circle at 50% 50%, black, transparent 80%);
+  opacity: 0.5;
+}
+
+/* ───────── Topbar ───────── */
+.topbar {
+  position: relative; z-index: 5;
+  flex: 0 0 56px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(12,13,17,0.85), rgba(12,13,17,0.55));
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+.brand {
+  display: flex; align-items: center; gap: 14px;
+}
+.brand-logo {
+  height: 22px;
+  opacity: 0.96;
+}
+.brand-divider {
+  width: 1px; height: 18px; background: var(--line-strong);
+}
+.brand-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 500;
+  color: var(--text-dim);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+.brand-tag em {
+  font-style: normal;
+  color: var(--accent-2);
+}
+
+.topbar-right { display: flex; align-items: center; gap: 16px; }
+
+.status-pill {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 12px 7px 11px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 500;
+  color: var(--text-2);
+  letter-spacing: 0.4px;
+}
+.status-pill .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 0 rgba(43, 214, 106, 0.4);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(43, 214, 106, 0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(43, 214, 106, 0); }
+}
+.status-pill.offline .dot {
+  background: var(--text-faint);
+  animation: none;
+  box-shadow: none;
+}
+
+.icon-btn {
+  width: 34px; height: 34px; display: grid; place-items: center;
+  background: transparent; border: 1px solid transparent;
+  border-radius: 8px; color: var(--text-dim);
+  cursor: pointer; transition: all 0.15s;
+}
+.icon-btn:hover { border-color: var(--line-strong); color: var(--text); background: rgba(255,255,255,0.03); }
+
+/* ───────── Layout ───────── */
+.layout {
+  position: relative; z-index: 1;
+  flex: 1; overflow-y: auto;
+  padding: 22px;
+  display: grid;
+  grid-template-columns: 1fr 1.15fr 1fr;
+  grid-template-rows: auto auto auto;
+  grid-template-areas:
+    'track car weather'
+    'session session weather'
+    'session session launch';
+  gap: 14px;
+  align-content: start;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.layout > .panel-track   { grid-area: track; }
+.layout > .panel-car     { grid-area: car; }
+.layout > .panel-weather { grid-area: weather; }
+.layout > .panel-session { grid-area: session; }
+.layout > .panel-launch  { grid-area: launch; }
+
+/* ───────── Panel ───────── */
+.panel {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  box-shadow:
+    0 1px 0 0 rgba(255,255,255,0.04) inset,
+    0 24px 60px -30px rgba(0,0,0,0.7);
+}
+.panel::before {
+  content: ''; position: absolute; inset: 0;
+  border-radius: inherit; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent 30%);
+}
+
+.panel-header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.panel-eyebrow {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.panel-eyebrow .num {
+  display: inline-grid; place-items: center;
+  width: 18px; height: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  font-size: 9px;
+  color: var(--text-2);
+}
+.panel-title {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.panel-aside {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* Practice status pill (defaults / modified) */
+.practice-status {
+  display: inline-flex; align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 8px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.practice-status .ps-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #4fd17a;
+  box-shadow: 0 0 0 3px rgba(79, 209, 122, 0.18);
+  flex: none;
+}
+.practice-status[data-modified="true"] {
+  background: rgba(255,59,31,0.10);
+  border-color: rgba(255,59,31,0.30);
+  color: var(--accent-2);
+}
+.practice-status[data-modified="true"] .ps-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255,59,31,0.18);
+}
+.practice-status .ps-reset {
+  margin-left: 4px;
+  padding: 2px 6px;
+  background: rgba(255,59,31,0.18);
+  border: 1px solid rgba(255,59,31,0.35);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.practice-status .ps-reset:hover { background: rgba(255,59,31,0.32); }
+
+/* ───────── Form controls ───────── */
+.select {
+  width: 100%;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 38px 11px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.75l3 3 3-3' stroke='%23ff6a4f' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+  /* keep gradient + chevron together */
+  background-image:
+    url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.75l3 3 3-3' stroke='%23ff6a4f' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+  background-repeat: no-repeat, no-repeat;
+  background-position: right 12px center, 0 0;
+  background-size: 12px, 100% 100%;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.05s;
+}
+.select:hover {
+  border-color: rgba(255,59,31,0.35);
+  background-image:
+    url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.75l3 3 3-3' stroke='%23ff8e75' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025));
+}
+.select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255,59,31,0.18), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.select:active { transform: translateY(0.5px); }
+.select:disabled { opacity: 0.45; cursor: not-allowed; }
+.select option {
+  background: #16171c;
+  color: var(--text);
+  padding: 8px 12px;
+}
+.select option:checked,
+.select option:hover {
+  background: rgba(255,59,31,0.18);
+  color: #fff;
+}
+
+/* ───────── Custom dropdown ───────── */
+.cdd { position: relative; width: 100%; }
+.cdd-trigger {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.cdd-trigger:hover {
+  border-color: rgba(255,59,31,0.35);
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025));
+}
+.cdd.open .cdd-trigger {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255,59,31,0.18), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.cdd-value {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cdd-chev {
+  flex: none;
+  width: 14px; height: 14px;
+  color: var(--accent-2);
+  transition: transform 0.18s;
+}
+.cdd.open .cdd-chev { transform: rotate(180deg); }
+.cdd-menu {
+  position: fixed;
+  z-index: 1000;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+  background: rgba(20, 21, 26, 0.96);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: 0 18px 48px -12px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,59,31,0.12);
+  display: none;
+  animation: cdd-in 0.14s ease-out;
+}
+.cdd-menu.open { display: block; }
+@keyframes cdd-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.cdd-option {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.cdd-option:hover, .cdd-option.active {
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+}
+.cdd-option.selected {
+  background: linear-gradient(135deg, rgba(255,59,31,0.18), rgba(255,59,31,0.06));
+  color: #fff;
+}
+.cdd-option .cdd-tick {
+  flex: none;
+  width: 14px; height: 14px;
+  color: var(--accent-2);
+  opacity: 0;
+}
+.cdd-option.selected .cdd-tick { opacity: 1; }
+.cdd-menu::-webkit-scrollbar { width: 8px; }
+.cdd-menu::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 4px;
+}
+.cdd-menu::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+
+/* Hide the underlying native select when enhanced */
+.cdd .cdd-native { display: none; }
+
+.row { display: flex; gap: 10px; }
+
+.muted { color: var(--text-dim); }
+.small { font-size: 12px; }
+
+/* ───────── Install pill (header) ───────── */
+.install-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  max-width: 320px;
+  padding: 6px 6px 6px 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.install-pill svg { color: var(--text-dim); flex: 0 0 auto; }
+.install-pill-label {
+  font-weight: 600; color: var(--text);
+  text-transform: uppercase; letter-spacing: 0.6px;
+  font-size: 10px;
+}
+.install-pill-path {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-dim);
+}
+.install-pill-btn {
+  flex: 0 0 auto;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-family: inherit; font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--text-2);
+  cursor: pointer; transition: all 0.15s;
+}
+.install-pill-btn:hover { color: var(--accent-2); border-color: var(--accent); }
+
+/* ───────── Track panel ───────── */
+.track-meta {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 12px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.02);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.track-meta-label {
+  text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--text-faint);
+}
+.track-meta-path {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-2);
+}
+.track-meta button {
+  background: transparent; border: none; color: var(--accent-2);
+  font-family: inherit; font-size: 11px; cursor: pointer; padding: 2px 4px;
+}
+.track-meta button:hover { color: var(--accent); }
+
+.track-selects {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.track-selects .field { gap: 6px; }
+.track-selects .select:disabled,
+.track-selects .cdd-trigger.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(255,255,255,0.015);
+}
+.track-selects .cdd.is-disabled .cdd-chev { opacity: 0.3; }
+
+.track-card {
+  margin-top: 12px;
+  display: grid; grid-template-columns: 64px 1fr auto;
+  gap: 14px; align-items: center;
+  padding: 12px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.track-circuit {
+  width: 64px; height: 64px;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 40% 40%, rgba(255,59,31,0.18), transparent 65%);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.track-circuit svg { width: 100%; height: 100%; }
+.track-card-info {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.track-name { font-size: 14px; font-weight: 600; }
+.track-stats {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--text-dim);
+  display: flex; gap: 10px; align-items: center;
+}
+.track-stats .sep { color: var(--text-faint); }
+.track-flag {
+  width: 24px; height: 18px; border-radius: 2px; overflow: hidden;
+  border: 1px solid var(--line);
+  display: grid; place-items: center;
+  font-size: 14px;
+}
+
+/* ───────── Car panel ───────── */
+.class-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-bottom: 12px;
+}
+.class-chip {
+  flex: 1 1 auto;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text-2);
+  font-family: inherit; font-size: 11.5px; font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  cursor: pointer; transition: all 0.15s;
+  display: flex; flex-direction: column; gap: 2px; align-items: center;
+  white-space: nowrap;
+}
+.class-chip .count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; font-weight: 400;
+  color: var(--text-faint);
+  letter-spacing: 0.4px;
+}
+.class-chip:hover { border-color: var(--line-strong); color: var(--text); }
+.class-chip.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-2);
+}
+.class-chip.active .count { color: rgba(255, 106, 79, 0.8); }
+
+.auto-detect-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 10px;
+  font-size: 12px; color: var(--text-dim);
+  flex-wrap: wrap;
+}
+.auto-detect-row .ghost-btn { flex: 0 0 auto; white-space: nowrap; }
+.auto-detect-row .auto-hint { flex: 1; text-align: right; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.ghost-btn {
+  background: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.ghost-btn:hover { border-color: var(--line-strong); color: var(--text); }
+.ghost-btn.active {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent-2);
+}
+
+/* ───────── Weather panel ───────── */
+.panel-weather { display: flex; flex-direction: column; min-height: 360px; }
+.weather-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.wx-pill {
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px;
+  width: 64px;
+  padding: 12px 6px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer; transition: all 0.18s;
+  font-family: inherit; color: var(--text);
+}
+.wx-pill:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+.wx-pill.active {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, rgba(255,59,31,0.10), rgba(255,59,31,0.02) 60%);
+  box-shadow: 0 8px 24px -10px var(--accent-shadow);
+}
+.wx-pill .wc-bg {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0.55; z-index: 0;
+}
+.wx-pill[data-wx="dry"] .wc-bg {
+  background: radial-gradient(circle at 50% 30%, rgba(255, 200, 90, 0.22), transparent 65%);
+}
+.wx-pill[data-wx="rain"] .wc-bg {
+  background: radial-gradient(circle at 50% 30%, rgba(80, 130, 200, 0.22), transparent 65%);
+}
+.wx-pill > svg, .wx-pill > .wx-pill-name { position: relative; z-index: 1; }
+.wx-brand {
+  position: absolute;
+  top: 5px; left: 5px;
+  width: 14px; height: 14px;
+  z-index: 2;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.wx-pill.active .wx-brand { opacity: 1; }
+.wx-pill-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--text-2);
+  text-align: center;
+  line-height: 1.2;
+}
+.wx-pill.active .wx-pill-name { color: var(--text); }
+
+.weather-card {
+  position: relative; overflow: hidden;
+  display: grid; grid-template-columns: 48px 1fr auto;
+  gap: 12px; align-items: center;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer; transition: all 0.18s;
+  text-align: left;
+  font-family: inherit; color: var(--text);
+}
+.weather-card:hover { border-color: var(--line-strong); }
+.weather-card.active {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, rgba(255,59,31,0.10), rgba(255,59,31,0.02) 60%);
+  box-shadow: 0 8px 24px -10px var(--accent-shadow);
+}
+.weather-card .wc-bg {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0.6;
+  z-index: 0;
+}
+.weather-card[data-wx="custom"] .wc-bg {
+  background: radial-gradient(circle at 80% 30%, rgba(255, 59, 31, 0.12), transparent 55%);
+}
+.weather-card > * { position: relative; z-index: 1; }
+
+.wc-icon {
+  width: 48px; height: 48px;
+  display: grid; place-items: center;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.wc-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wc-name { font-size: 14px; font-weight: 700; letter-spacing: -0.005em; }
+.wc-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; color: var(--text-dim); letter-spacing: 0.3px;
+}
+.weather-card.active .wc-meta { color: var(--text-2); }
+
+.custom-weather {
+  margin-top: 12px;
+  padding: 14px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+
+/* Read-only weather details (Dry / Wet presets) */
+.wx-details {
+  margin-top: 12px;
+  padding: 14px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  align-content: start;
+}
+.wx-details-title {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 1.2px;
+  color: var(--text-faint);
+}
+.wx-lock {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  background: rgba(255,59,31,0.10);
+  border: 1px solid rgba(255,59,31,0.25);
+  border-radius: 999px;
+  font-size: 9.5px;
+  letter-spacing: 0.8px;
+  color: var(--accent-2);
+}
+.wx-stat {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(255,255,255,0.06);
+}
+.wx-stat:last-of-type, .wx-stat:nth-last-of-type(2):nth-of-type(odd) {
+  border-bottom: none;
+}
+.wx-stat-k {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.8px;
+  color: var(--text-faint);
+}
+.wx-stat-v {
+  font-size: 13px; font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.005em;
+}
+.custom-weather-title {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 2px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 1.2px;
+  color: var(--text-faint);
+}
+.custom-weather-close {
+  background: transparent; border: none; color: var(--text-dim);
+  cursor: pointer; padding: 2px; line-height: 0;
+}
+.custom-weather-close:hover { color: var(--text); }
+.hidden { display: none !important; }
+
+/* ───────── Field / range ───────── */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field-label {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-faint);
+}
+.field-label em {
+  color: var(--text);
+  font-style: normal;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+input[type='range'] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 4px;
+  background: linear-gradient(to right, var(--accent) var(--val, 0%), rgba(255,255,255,0.08) var(--val, 0%));
+  border-radius: 999px; outline: none;
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px;
+  background: #fff; border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--accent), 0 2px 8px rgba(255,59,31,0.4);
+  transition: transform 0.1s;
+}
+input[type='range']::-webkit-slider-thumb:hover { transform: scale(1.1); }
+
+/* ───────── Switch ───────── */
+.toggle-field {
+  flex-direction: row; align-items: center; justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.toggle-field .field-label { flex: 1; }
+
+.switch {
+  position: relative; display: inline-block;
+  width: 36px; height: 20px; cursor: pointer; flex: 0 0 auto;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch-slider {
+  position: absolute; inset: 0;
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px; transition: 0.18s;
+}
+.switch-slider::before {
+  content: ''; position: absolute;
+  width: 14px; height: 14px;
+  left: 3px; top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: 0.18s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+.switch input:checked + .switch-slider { background: var(--accent); }
+.switch input:checked + .switch-slider::before { transform: translateX(16px); }
+
+/* ───────── Session panel ───────── */
+.panel-session .panel-header { align-items: center; }
+.session-groups {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+}
+.session-group {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.session-group-title {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-faint);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.session-group-title svg { color: var(--text-dim); }
+
+.rule-pills {
+  display: flex; flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.rule-pill {
+  flex: 1; min-width: 0;
+  display: inline-flex; align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: inherit; color: var(--text-2);
+  font-size: 11.5px; font-weight: 600; letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.rule-pill:hover { border-color: var(--line-strong); }
+.rule-pill .rp-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-faint);
+  box-shadow: 0 0 0 0 transparent;
+  transition: background 0.15s, box-shadow 0.15s;
+  flex: none;
+}
+.rule-pill .rp-name {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rule-pill .rp-state {
+  flex: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px; letter-spacing: 1px;
+  color: var(--text-faint);
+}
+.rule-pill.is-on {
+  background: linear-gradient(135deg, rgba(255,59,31,0.14), rgba(255,59,31,0.04) 70%);
+  border-color: rgba(255,59,31,0.35);
+  color: var(--text);
+}
+.rule-pill.is-on .rp-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255,59,31,0.18);
+}
+.rule-pill.is-on .rp-state { color: var(--accent-2); }
+
+/* ───────── Launch panel ───────── */
+.panel-launch {
+  display: flex; flex-direction: column; gap: 12px;
+  background: linear-gradient(180deg, rgba(255,59,31,0.08), rgba(22,23,28,0.72));
+  border-color: rgba(255,59,31,0.25);
+}
+.launch-summary {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.summary-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.summary-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 1px;
+  color: var(--text-faint);
+}
+.summary-value {
+  font-size: 12px; font-weight: 600;
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.summary-value.dim { color: var(--text-dim); font-weight: 500; }
+
+.launch-btn {
+  position: relative;
+  width: 100%;
+  background: linear-gradient(180deg, #ff6a4f 0%, #ff3b1f 50%, #e8331a 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 18px 20px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2.2px;
+  cursor: pointer;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.2) inset,
+    0 -1px 0 rgba(0,0,0,0.3) inset,
+    0 8px 24px -8px var(--accent-shadow),
+    0 0 0 1px rgba(255,59,31,0.4);
+  transition: transform 0.06s, box-shadow 0.18s;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  overflow: hidden;
+}
+.launch-btn::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at top, rgba(255,255,255,0.18), transparent 50%);
+  pointer-events: none;
+}
+.launch-btn:hover:not(:disabled) {
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.25) inset,
+    0 -1px 0 rgba(0,0,0,0.3) inset,
+    0 12px 32px -8px var(--accent-shadow),
+    0 0 0 1px rgba(255,59,31,0.6);
+}
+.launch-btn:active:not(:disabled) { transform: translateY(1px); }
+.launch-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.launch-btn .arrow {
+  display: grid; place-items: center;
+  width: 22px; height: 22px;
+  background: rgba(0,0,0,0.25);
+  border-radius: 50%;
+}
+
+.launch-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; color: var(--text-dim);
+}
+.log-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: none; color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.8px;
+  cursor: pointer;
+}
+.log-toggle:hover { color: var(--text-2); }
+.log-toggle .chev { transition: transform 0.18s; }
+.log-toggle.open .chev { transform: rotate(180deg); }
+
+.log {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  max-height: 140px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+.log .err { color: var(--accent-2); }
+.log .ok { color: var(--green); }
+.log .ts { color: var(--text-faint); margin-right: 4px; }
+
+/* ───────── Footer ───────── */
+.footer {
+  position: relative; z-index: 1;
+  flex: 0 0 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 22px;
+  border-top: 1px solid var(--line);
+  background: rgba(7,7,10,0.6);
+  backdrop-filter: blur(10px);
+}
+.footer-meta {
+  display: flex; gap: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+.footer-meta .live { color: var(--green); }
+
+/* ───────── Scrollbars ───────── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <img src="assets/logo.png" alt="GO Setups" class="brand-logo" />
+    <span class="brand-divider"></span>
+    <span class="brand-tag">LMU Launcher · <em>v1.0.0</em></span>
+  </div>
+  <div class="topbar-right">
+    <div class="install-pill" id="installPill" title="D:\SteamLibrary\steamapps\common\Le Mans Ultimate">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4M3 17l9 4 9-4"/></svg>
+      <span class="install-pill-label">LMU</span>
+      <span class="install-pill-path">…\common\Le Mans Ultimate</span>
+      <button type="button" class="install-pill-btn">Change</button>
+    </div>
+    <div class="status-pill" id="lmuStatusPill">
+      <span class="dot"></span>
+      <span id="lmuStatusText">LMU running · main menu</span>
+    </div>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- TRACK -->
+  <section class="panel panel-track">
+    <div class="panel-header">
+      <div>
+        <div class="panel-eyebrow"><span class="num">01</span> Circuit</div>
+        <h2 class="panel-title">Track</h2>
+      </div>
+    </div>
+    <div class="track-selects">
+      <label class="field">
+        <span class="field-label">Circuit</span>
+        <select id="trackSelect" class="select">
+          <option value="portimao">Algarve International Circuit</option>
+          <option value="interlagos">Autódromo José Carlos Pace</option>
+          <option value="monza">Autodromo Nazionale Monza</option>
+          <option value="imola">Autodromo Enzo e Dino Ferrari (Imola)</option>
+          <option value="bahrain">Bahrain International Circuit</option>
+          <option value="cota">Circuit of the Americas</option>
+          <option value="lemans">Circuit de la Sarthe</option>
+          <option value="fuji">Fuji Speedway</option>
+          <option value="qatar">Lusail International Circuit</option>
+          <option value="sebring">Sebring International Raceway</option>
+          <option value="silverstone">Silverstone Circuit</option>
+          <option value="spa">Spa-Francorchamps</option>
+        </select>
+      </label>
+      <label class="field" id="layoutField">
+        <span class="field-label">Layout <em id="layoutCountVal">4 options</em></span>
+        <select id="layoutSelect" class="select"></select>
+      </label>
+    </div>
+  </section>
+
+  <!-- CAR -->
+  <section class="panel panel-car">
+    <div class="panel-header">
+      <div>
+        <div class="panel-eyebrow"><span class="num">02</span> Vehicle</div>
+        <h2 class="panel-title">Car</h2>
+      </div>
+    </div>
+
+    <div class="class-chips" id="classChips">
+      <button class="class-chip active" data-class="Hypercar">
+        <span>Hypercar</span><span class="count">12</span>
+      </button>
+      <button class="class-chip" data-class="LMP2">
+        <span>LMP2</span><span class="count">6</span>
+      </button>
+      <button class="class-chip" data-class="LMGT3">
+        <span>LMGT3</span><span class="count">14</span>
+      </button>
+      <button class="class-chip" data-class="GTE">
+        <span>GTE</span><span class="count">6</span>
+      </button>
+    </div>
+
+    <div class="row">
+      <select class="select" style="flex: 1.1">
+        <option>Alpine A424</option>
+        <option>Ferrari 499P</option>
+        <option>Toyota GR010</option>
+        <option>Porsche 963</option>
+        <option>BMW M Hybrid V8</option>
+      </select>
+      <select class="select" style="flex: 1.4">
+        <option>Alpine Endurance Team #36 — LM</option>
+        <option>Alpine Endurance Team #35</option>
+      </select>
+    </div>
+
+    <div class="auto-detect-row">
+      <button class="ghost-btn" type="button">Auto-detect</button>
+      <button class="ghost-btn" type="button" title="Refresh">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+        Refresh
+      </button>
+      <span class="muted small auto-hint">Inherits LMU.</span>
+    </div>
+  </section>
+
+  <!-- WEATHER -->
+  <section class="panel panel-weather">
+    <div class="panel-header">
+      <div>
+        <div class="panel-eyebrow"><span class="num">03</span> Conditions</div>
+        <h2 class="panel-title">Weather preset</h2>
+      </div>
+    </div>
+
+    <div class="weather-row" id="weatherCards">
+      <button class="wx-pill active" data-preset="dry" data-wx="dry" title="GO Setups Dry — Clear, 20°C, Saturated" aria-label="GO Setups Dry">
+        <span class="wc-bg"></span>
+        <img class="wx-brand" src="ref/icon.png" alt="" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFC85A" stroke-width="1.7" stroke-linecap="round">
+          <circle cx="12" cy="12" r="4" fill="rgba(255,200,90,0.18)"/>
+          <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>
+        </svg>
+        <span class="wx-pill-name">Dry</span>
+      </button>
+
+      <button class="wx-pill" data-preset="rain" data-wx="rain" title="GO Setups Rain — Overcast, 75% rain, 20°C" aria-label="GO Setups Rain">
+        <span class="wc-bg"></span>
+        <img class="wx-brand" src="ref/icon.png" alt="" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7FAEEF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 14a4 4 0 0 0-8-1A3.5 3.5 0 0 0 6.5 20H17a3 3 0 0 0 0-6h-1z" fill="rgba(127,174,239,0.15)"/>
+          <path d="M9 21l-1 2M13 21l-1 2M17 21l-1 2"/>
+        </svg>
+        <span class="wx-pill-name">Wet</span>
+      </button>
+
+      <button class="weather-card wx-custom" data-preset="custom" data-wx="custom">
+        <span class="wc-bg"></span>
+        <span class="wc-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FF6A4F" stroke-width="1.6" stroke-linecap="round">
+            <line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2.2" fill="#0c0d11"/>
+            <line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2.2" fill="#0c0d11"/>
+            <line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2.2" fill="#0c0d11"/>
+          </svg>
+        </span>
+        <span class="wc-text">
+          <span class="wc-name">Custom</span>
+          <span class="wc-meta">SKY · RAIN · TEMP · WIND</span>
+        </span>
+      </button>
+    </div>
+
+    <!-- DRY details (readonly) -->
+    <div id="wxDetailsDry" class="wx-details">
+      <div class="wx-details-title">
+        <span>GO Setups Dry — Preset locked</span>
+        <span class="wx-lock">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          PRESET
+        </span>
+      </div>
+      <div class="wx-stat"><span class="wx-stat-k">Sky</span><span class="wx-stat-v">Clear</span></div>
+      <div class="wx-stat"><span class="wx-stat-k">Air temp</span><span class="wx-stat-v">20 °C</span></div>
+      <div class="wx-stat"><span class="wx-stat-k">Track</span><span class="wx-stat-v">Saturated</span></div>
+      <div class="wx-stat"><span class="wx-stat-k">Rain chance</span><span class="wx-stat-v">0%</span></div>
+      <div class="wx-stat"><span class="wx-stat-k">Wind</span><span class="wx-stat-v">2 km/h</span></div>
+      <div class="wx-stat"><span class="wx-stat-k">Humidity</span><span class="wx-stat-v">55%</span></div>
+    </div>
+
+    <!-- WET details (readonly) -->
+    <div id="wxDetailsRain" class="wx-details hidden">
+      <div class="wx-details-title">
+        <span>GO Setups Wet — Preset locked</span>
+        <span class="wx-lock">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          PRESET
+        </span>
+      </div>
+      <div class="wx-stat"><span class="wx-stat-k">Sky</span><span class="wx-stat-v">Overcast</span></div>
+      <div class="wx-stat"><span class="wx-stat-k">Air temp</span><span class="wx-stat-v">20 °C</span></div>
+      <div class="wx-stat"><span class="wx-stat-k">Track</span><span class="wx-stat-v">Heavy wet</span></div>
+      <div class="wx-stat"><span class="wx-stat-k">Rain chance</span><span class="wx-stat-v">75%</span></div>
+      <div class="wx-stat"><span class="wx-stat-k">Wind</span><span class="wx-stat-v">8 km/h</span></div>
+      <div class="wx-stat"><span class="wx-stat-k">Humidity</span><span class="wx-stat-v">92%</span></div>
+    </div>
+
+    <div id="customWeather" class="custom-weather hidden">
+      <div class="custom-weather-title">
+        <span>Custom — fine tune</span>
+      </div>
+      <label class="field">
+        <span class="field-label">Temperature <em id="cwTempVal">22°C</em></span>
+        <input id="cwTemp" type="range" min="5" max="40" step="1" value="22" />
+      </label>
+      <label class="field">
+        <span class="field-label">Sky</span>
+        <select id="cwSky" class="select">
+          <option>Clear</option><option>Partially cloudy</option><option>Overcast</option><option>Overcast &amp; rain</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Rain chance <em id="cwRainVal">0%</em></span>
+        <input id="cwRain" type="range" min="0" max="100" step="5" value="0" />
+      </label>
+      <label class="field">
+        <span class="field-label">Wind <em id="cwWindVal">0 km/h</em></span>
+        <input id="cwWind" type="range" min="0" max="50" step="1" value="0" />
+      </label>
+    </div>
+  </section>
+
+  <!-- SESSION -->
+  <section class="panel panel-session">
+    <div class="panel-header">
+      <div>
+        <div class="panel-eyebrow"><span class="num">04</span> Session</div>
+        <h2 class="panel-title">Practice settings</h2>
+      </div>
+      <div class="practice-status" id="practiceStatus" data-modified="false">
+        <span class="ps-dot" aria-hidden="true"></span>
+        <span class="ps-label" id="practiceStatusLabel">GO Setups defaults</span>
+        <button type="button" class="ps-reset" id="practiceReset" hidden>Reset</button>
+      </div>
+    </div>
+
+    <div class="session-groups">
+      <!-- Time group -->
+      <div class="session-group">
+        <div class="session-group-title">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          Time
+        </div>
+        <label class="field">
+          <span class="field-label">Practice length <em id="practiceLengthVal">360 min</em></span>
+          <input id="practiceLength" type="range" min="15" max="360" step="15" value="360" />
+        </label>
+        <label class="field">
+          <span class="field-label">Start time <em id="startTimeVal">12:00</em></span>
+          <input id="startTime" type="range" min="0" max="1440" step="30" value="720" />
+        </label>
+        <label class="field">
+          <span class="field-label">Time scale <em id="timeScaleVal">Normal</em></span>
+          <input id="timeScale" type="range" min="0" max="60" step="1" value="0" />
+        </label>
+      </div>
+
+      <!-- Track surface group -->
+      <div class="session-group">
+        <div class="session-group-title">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12c0-5 4-9 9-9s9 4 9 9-4 9-9 9"/><path d="M3 12h18M12 3v18"/></svg>
+          Track surface
+        </div>
+        <label class="field">
+          <span class="field-label">Starting grip</span>
+          <select id="startingGrip" class="select">
+            <option>Saturated</option><option>Heavy</option><option>Medium</option><option>Light</option><option>Green</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">RealRoad scale <em id="realRoadTimeScaleVal">0×</em></span>
+          <input id="realRoadTimeScale" type="range" min="0" max="15" step="1" value="0" />
+        </label>
+      </div>
+
+      <!-- Rules group -->
+      <div class="session-group">
+        <div class="session-group-title">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4l4 2 4-2 4 2 4-2v14l-4 2-4-2-4 2-4-2"/></svg>
+          Rules
+        </div>
+        <label class="field">
+          <span class="field-label">Flag rules</span>
+          <select id="flagRules" class="select">
+            <option>Full w/o DQ</option><option>Penalties &amp; FCY</option><option>Penalties only</option><option>None</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Track limits</span>
+          <select id="trackLimitsRules" class="select">
+            <option>Default</option><option>Strict</option><option>Relaxed</option><option>None</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Limit points <em id="trackLimitsPointsVal">5</em></span>
+          <input id="trackLimitsPoints" type="range" min="0" max="63" step="1" value="5" />
+        </label>
+        <label class="field">
+          <span class="field-label">Mechanical failures</span>
+          <select id="mechanicalFailures" class="select">
+            <option>Normal</option><option>Off</option><option>Time scaled</option>
+          </select>
+        </label>
+        <div class="rule-pills">
+          <button type="button" class="rule-pill is-on" id="tireWarmersPill" data-target="tireWarmers" aria-pressed="true">
+            <span class="rp-dot" aria-hidden="true"></span>
+            <span class="rp-name">Tyre warmers</span>
+            <span class="rp-state">ON</span>
+          </button>
+          <button type="button" class="rule-pill is-on" id="privatePracticePill" data-target="privatePractice" aria-pressed="true">
+            <span class="rp-dot" aria-hidden="true"></span>
+            <span class="rp-name">Private practice</span>
+            <span class="rp-state">ON</span>
+          </button>
+          <input id="tireWarmers" type="checkbox" checked hidden />
+          <input id="privatePractice" type="checkbox" checked hidden />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LAUNCH -->
+  <section class="panel panel-launch">
+    <div class="panel-header">
+      <div>
+        <div class="panel-eyebrow"><span class="num">05</span> Go</div>
+        <h2 class="panel-title">Launch</h2>
+      </div>
+    </div>
+
+    <div class="launch-summary">
+      <div class="summary-item">
+        <span class="summary-label">Track</span>
+        <span class="summary-value" id="sumTrack">Bahrain — Endurance</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Car</span>
+        <span class="summary-value" id="sumCar">Alpine A424 #36</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Weather</span>
+        <span class="summary-value" id="sumWx">Dry · 20°C · Saturated</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-label">Length</span>
+        <span class="summary-value" id="sumLen">360 min @ 12:00</span>
+      </div>
+    </div>
+
+    <button id="launchBtn" class="launch-btn" type="button">
+      <span>Launch practice in LMU</span>
+      <span class="arrow">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </span>
+    </button>
+
+    <div class="launch-foot">
+      <span class="muted small">Loads straight into garage. ~8s.</span>
+      <button class="log-toggle" id="logToggle" type="button">
+        <span>Log</span>
+        <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+    </div>
+
+    <div class="log hidden" id="log">
+      <div><span class="ts">[14:23:11]</span> Probing http://localhost:6397 …</div>
+      <div><span class="ts">[14:23:11]</span> <span class="ok">LMU navigation/state OK · NAV_MAIN_MENU</span></div>
+      <div><span class="ts">[14:23:11]</span> POST /rest/race/track · id=2009</div>
+      <div><span class="ts">[14:23:12]</span> SCENE block fetched (847 kB)</div>
+      <div><span class="ts">[14:23:12]</span> Composing session JSON · 29 fields · weather=dry</div>
+      <div><span class="ts">[14:23:12]</span> <span class="ok">loadGame OK · entering garage…</span></div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="footer-meta">
+    <span>GO Setups · Le Mans Ultimate</span>
+    <span><span class="live">●</span> REST 6397</span>
+  </div>
+  <div class="footer-meta">
+    <span>v1.0.0</span>
+  </div>
+</footer>
+
+<!-- React for Tweaks panel only -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+
+<script>
+// ───────── Range fill (gradient that follows thumb) ─────────
+/* plain-JS section */
+function updateRangeFill(input) {
+  const min = +input.min || 0;
+  const max = +input.max || 100;
+  const val = +input.value;
+  const pct = ((val - min) / (max - min)) * 100;
+  input.style.setProperty('--val', pct + '%');
+}
+document.querySelectorAll('input[type=range]').forEach((r) => {
+  updateRangeFill(r);
+  r.addEventListener('input', () => updateRangeFill(r));
+});
+
+// ───────── Range labels ─────────
+function pad(n) { return String(n).padStart(2, '0'); }
+function bind(id, valId, fmt) {
+  const el = document.getElementById(id);
+  const v = document.getElementById(valId);
+  if (!el || !v) return;
+  const update = () => { v.textContent = fmt(+el.value); };
+  el.addEventListener('input', update);
+  update();
+}
+bind('practiceLength', 'practiceLengthVal', (v) => v + ' min');
+bind('startTime', 'startTimeVal', (v) => {
+  const m = ((v % 1440) + 1440) % 1440;
+  return pad(Math.floor(m/60)) + ':' + pad(m%60);
+});
+bind('timeScale', 'timeScaleVal', (v) => v === 0 ? 'Normal' : ('×' + v));
+bind('realRoadTimeScale', 'realRoadTimeScaleVal', (v) => v + '×');
+bind('trackLimitsPoints', 'trackLimitsPointsVal', (v) => String(v));
+bind('cwTemp', 'cwTempVal', (v) => v + '°C');
+bind('cwRain', 'cwRainVal', (v) => v + '%');
+bind('cwWind', 'cwWindVal', (v) => v + ' km/h');
+
+// ───────── Custom dropdown enhancer ─────────
+function enhanceSelects(root = document) {
+  const selects = root.querySelectorAll('select.select:not([data-cdd-enhanced])');
+  selects.forEach((sel) => {
+    sel.setAttribute('data-cdd-enhanced', '1');
+    const wrapper = document.createElement('div');
+    wrapper.className = 'cdd';
+    if (sel.style.flex) wrapper.style.flex = sel.style.flex;
+    sel.classList.add('cdd-native');
+
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'cdd-trigger';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.innerHTML = `
+      <span class="cdd-value"></span>
+      <svg class="cdd-chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.75l3 3 3-3"/></svg>
+    `;
+    const valueEl = trigger.querySelector('.cdd-value');
+
+    const menu = document.createElement('div');
+    menu.className = 'cdd-menu';
+    menu.setAttribute('role', 'listbox');
+
+    const optionEls = [];
+    Array.from(sel.options).forEach((opt, i) => {
+      const o = document.createElement('div');
+      o.className = 'cdd-option';
+      o.setAttribute('role', 'option');
+      o.dataset.index = String(i);
+      o.innerHTML = `
+        <span>${opt.textContent}</span>
+        <svg class="cdd-tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      `;
+      o.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectIndex(i);
+        close();
+      });
+      menu.appendChild(o);
+      optionEls.push(o);
+    });
+
+    function syncFromNative() {
+      const i = sel.selectedIndex;
+      valueEl.textContent = sel.options[i] ? sel.options[i].textContent : '';
+      optionEls.forEach((el, idx) => el.classList.toggle('selected', idx === i));
+    }
+    function selectIndex(i) {
+      sel.selectedIndex = i;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      syncFromNative();
+    }
+    function positionMenu() {
+      const rect = trigger.getBoundingClientRect();
+      const menuH = menu.offsetHeight || 280;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const flip = spaceBelow < Math.min(menuH + 12, 200) && rect.top > spaceBelow;
+      menu.style.left = rect.left + 'px';
+      menu.style.width = rect.width + 'px';
+      if (flip) {
+        menu.style.top = '';
+        menu.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+      } else {
+        menu.style.bottom = '';
+        menu.style.top = (rect.bottom + 6) + 'px';
+      }
+    }
+    function open() {
+      // close any other open dropdowns
+      document.querySelectorAll('.cdd.open').forEach((c) => {
+        if (c !== wrapper) {
+          c.classList.remove('open');
+          if (c._cddMenu) c._cddMenu.classList.remove('open');
+        }
+      });
+      wrapper.classList.add('open');
+      menu.classList.add('open');
+      trigger.setAttribute('aria-expanded', 'true');
+      positionMenu();
+      // scroll selected into view
+      const sel2 = menu.querySelector('.cdd-option.selected');
+      if (sel2) sel2.scrollIntoView({ block: 'nearest' });
+      window.addEventListener('scroll', positionMenu, true);
+      window.addEventListener('resize', positionMenu);
+    }
+    function close() {
+      wrapper.classList.remove('open');
+      menu.classList.remove('open');
+      trigger.setAttribute('aria-expanded', 'false');
+      activeIdx = -1;
+      optionEls.forEach((el) => el.classList.remove('active'));
+      window.removeEventListener('scroll', positionMenu, true);
+      window.removeEventListener('resize', positionMenu);
+    }
+
+    let activeIdx = -1;
+    function moveActive(delta) {
+      const n = optionEls.length;
+      activeIdx = activeIdx === -1 ? sel.selectedIndex : activeIdx;
+      activeIdx = (activeIdx + delta + n) % n;
+      optionEls.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+      optionEls[activeIdx].scrollIntoView({ block: 'nearest' });
+    }
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      wrapper.classList.contains('open') ? close() : open();
+    });
+    trigger.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!wrapper.classList.contains('open')) open();
+        moveActive(e.key === 'ArrowDown' ? 1 : -1);
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        if (wrapper.classList.contains('open') && activeIdx !== -1) {
+          e.preventDefault();
+          selectIndex(activeIdx);
+          close();
+        } else if (!wrapper.classList.contains('open')) {
+          e.preventDefault();
+          open();
+        }
+      } else if (e.key === 'Escape') {
+        close();
+      }
+    });
+
+    // Insert wrapper, move native select inside it, portal menu to body
+    sel.parentNode.insertBefore(wrapper, sel);
+    wrapper.appendChild(sel);
+    wrapper.appendChild(trigger);
+    document.body.appendChild(menu);
+    menu.dataset.cddOwner = '1';
+    wrapper._cddMenu = menu;
+    syncFromNative();
+    sel.addEventListener('change', syncFromNative);
+  });
+}
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.cdd.open').forEach((c) => {
+    const menu = c._cddMenu;
+    if (!c.contains(e.target) && (!menu || !menu.contains(e.target))) {
+      c.classList.remove('open');
+      if (menu) menu.classList.remove('open');
+      const trig = c.querySelector('.cdd-trigger');
+      if (trig) trig.setAttribute('aria-expanded', 'false');
+    }
+  });
+});
+enhanceSelects();
+
+// ───────── Practice status (defaults / modified) ─────────
+const practiceFieldIds = [
+  'practiceLength', 'startTime', 'timeScale',
+  'startingGrip', 'realRoadTimeScale',
+  'flagRules', 'trackLimitsRules', 'trackLimitsPoints', 'mechanicalFailures',
+  'tireWarmers', 'privatePractice',
+];
+const practiceDefaults = {};
+practiceFieldIds.forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  practiceDefaults[id] = el.type === 'checkbox' ? el.checked : el.value;
+});
+
+const practiceStatus = document.getElementById('practiceStatus');
+const practiceStatusLabel = document.getElementById('practiceStatusLabel');
+const practiceReset = document.getElementById('practiceReset');
+
+function isPracticeModified() {
+  return practiceFieldIds.some((id) => {
+    const el = document.getElementById(id);
+    if (!el) return false;
+    const v = el.type === 'checkbox' ? el.checked : el.value;
+    return v !== practiceDefaults[id];
+  });
+}
+function refreshPracticeStatus() {
+  const modified = isPracticeModified();
+  practiceStatus.dataset.modified = String(modified);
+  practiceStatusLabel.textContent = modified ? 'Modified' : 'GO Setups defaults';
+  practiceReset.hidden = !modified;
+}
+practiceFieldIds.forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', refreshPracticeStatus);
+  el.addEventListener('change', refreshPracticeStatus);
+});
+practiceReset.addEventListener('click', () => {
+  practiceFieldIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === 'checkbox') {
+      el.checked = practiceDefaults[id];
+    } else {
+      el.value = practiceDefaults[id];
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  // Sync rule pills to their checkboxes
+  document.querySelectorAll('.rule-pill').forEach((pill) => {
+    const cb = document.getElementById(pill.dataset.target);
+    if (!cb) return;
+    const on = cb.checked;
+    pill.classList.toggle('is-on', on);
+    pill.setAttribute('aria-pressed', String(on));
+    pill.querySelector('.rp-state').textContent = on ? 'ON' : 'OFF';
+  });
+  refreshPracticeStatus();
+});
+
+// ───────── Track + Layout ─────────
+const TRACK_LAYOUTS = {
+  bahrain:    [['endurance','Endurance'], ['gp','Grand Prix'], ['outer','Outer'], ['paddock','Paddock']],
+  spa:        [['endurance','Endurance']],
+  lemans:     [['24h','24h Circuit'], ['bugatti','Bugatti']],
+  imola:      [['gp','Grand Prix']],
+  fuji:       [['gp','Grand Prix']],
+  sebring:    [['12h','12h Circuit'], ['short','Short']],
+  monza:      [['gp','Grand Prix'], ['junior','Junior']],
+  cota:       [['gp','Grand Prix'], ['national','National']],
+  portimao:   [['gp','Grand Prix']],
+  silverstone:[['gp','Grand Prix'], ['national','National'], ['international','International']],
+  interlagos: [['gp','Grand Prix']],
+  qatar:      [['gp','Grand Prix']],
+};
+const TRACK_LENGTHS = {
+  'bahrain.endurance':'5.412 km','bahrain.gp':'5.412 km','bahrain.outer':'3.543 km','bahrain.paddock':'2.550 km',
+  'spa.endurance':'7.004 km',
+  'lemans.24h':'13.626 km','lemans.bugatti':'4.185 km',
+  'imola.gp':'4.909 km','fuji.gp':'4.563 km',
+  'sebring.12h':'6.019 km','sebring.short':'3.701 km',
+  'monza.gp':'5.793 km','monza.junior':'2.405 km',
+  'cota.gp':'5.513 km','cota.national':'3.427 km',
+  'portimao.gp':'4.692 km',
+  'silverstone.gp':'5.891 km','silverstone.national':'2.638 km','silverstone.international':'2.974 km',
+  'interlagos.gp':'4.309 km','qatar.gp':'5.418 km',
+};
+const TRACK_NAMES_SHORT = {
+  bahrain:'Bahrain', spa:'Spa', lemans:'Le Mans', imola:'Imola', fuji:'Fuji', sebring:'Sebring',
+  monza:'Monza', cota:'COTA', portimao:'Portimão', silverstone:'Silverstone', interlagos:'Interlagos', qatar:'Lusail',
+};
+
+const trackSelect = document.getElementById('trackSelect');
+const layoutSelect = document.getElementById('layoutSelect');
+const layoutCountVal = document.getElementById('layoutCountVal');
+const trackLengthAside = document.getElementById('trackLengthAside');
+
+function rebuildLayoutOptions() {
+  const trackKey = trackSelect.value;
+  const layouts = TRACK_LAYOUTS[trackKey] || [];
+  const onlyOne = layouts.length <= 1;
+
+  // Rebuild native options
+  layoutSelect.innerHTML = '';
+  layouts.forEach(([val, label]) => {
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = label;
+    layoutSelect.appendChild(opt);
+  });
+
+  // Rebuild the custom dropdown to reflect new options
+  const cdd = layoutSelect.closest('.cdd');
+  if (cdd) {
+    const oldMenu = cdd._cddMenu;
+    if (oldMenu && oldMenu.parentNode) oldMenu.parentNode.removeChild(oldMenu);
+    cdd.parentNode.insertBefore(layoutSelect, cdd);
+    cdd.parentNode.removeChild(cdd);
+    layoutSelect.removeAttribute('data-cdd-enhanced');
+    layoutSelect.classList.remove('cdd-native');
+    enhanceSelects(layoutSelect.parentNode);
+  }
+
+  // Disable state on the new wrapper
+  const newCdd = layoutSelect.closest('.cdd');
+  layoutSelect.disabled = onlyOne;
+  if (newCdd) {
+    newCdd.classList.toggle('is-disabled', onlyOne);
+    const trig = newCdd.querySelector('.cdd-trigger');
+    if (trig) {
+      trig.classList.toggle('is-disabled', onlyOne);
+      trig.disabled = onlyOne;
+    }
+  }
+  layoutCountVal.textContent = onlyOne ? 'Only layout' : (layouts.length + ' options');
+  updateTrackSummary();
+}
+function updateTrackSummary() {
+  const trackKey = trackSelect.value;
+  const layouts = TRACK_LAYOUTS[trackKey] || [];
+  const layout = layouts.find(([v]) => v === layoutSelect.value) || layouts[0];
+  const layoutLabel = layout ? layout[1] : '';
+  const length = layout ? TRACK_LENGTHS[trackKey + '.' + layout[0]] : '';
+  const sumTrack = document.getElementById('sumTrack');
+  if (sumTrack) sumTrack.textContent = (TRACK_NAMES_SHORT[trackKey] || '') + (layoutLabel ? ' — ' + layoutLabel : '');
+  if (trackLengthAside) trackLengthAside.textContent = length || '';
+}
+trackSelect.addEventListener('change', rebuildLayoutOptions);
+layoutSelect.addEventListener('change', updateTrackSummary);
+rebuildLayoutOptions();
+
+// ───────── Class chips ─────────
+document.querySelectorAll('.class-chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.class-chip').forEach((c) => c.classList.remove('active'));
+    chip.classList.add('active');
+  });
+});
+
+// ───────── Rule pills (toggle) ─────────
+document.querySelectorAll('.rule-pill').forEach((pill) => {
+  pill.addEventListener('click', () => {
+    const targetId = pill.dataset.target;
+    const cb = targetId ? document.getElementById(targetId) : null;
+    const on = !pill.classList.contains('is-on');
+    pill.classList.toggle('is-on', on);
+    pill.setAttribute('aria-pressed', String(on));
+    pill.querySelector('.rp-state').textContent = on ? 'ON' : 'OFF';
+    if (cb) {
+      cb.checked = on;
+      cb.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+});
+
+// ───────── Weather presets ─────────
+const weatherTargets = document.querySelectorAll('[data-preset]');
+const wxPanels = {
+  dry: document.getElementById('wxDetailsDry'),
+  rain: document.getElementById('wxDetailsRain'),
+  custom: document.getElementById('customWeather'),
+};
+weatherTargets.forEach((card) => {
+  card.addEventListener('click', () => {
+    weatherTargets.forEach((c) => c.classList.remove('active'));
+    card.classList.add('active');
+    const preset = card.dataset.preset;
+    Object.entries(wxPanels).forEach(([k, el]) => {
+      if (el) el.classList.toggle('hidden', k !== preset);
+    });
+    const sumWx = document.getElementById('sumWx');
+    if (preset === 'dry') sumWx.textContent = 'Dry · 20°C · Saturated';
+    else if (preset === 'rain') sumWx.textContent = 'Rain · Overcast · 20°C';
+    else sumWx.textContent = 'Custom · tuned';
+  });
+});
+
+// ───────── Log toggle ─────────
+const logToggle = document.getElementById('logToggle');
+const log = document.getElementById('log');
+logToggle.addEventListener('click', () => {
+  const open = log.classList.toggle('hidden');
+  logToggle.classList.toggle('open', !open);
+});
+
+// ───────── Tweaks ─────────
+</script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "#FF3B1F",
+  "density": "comfy",
+  "weatherTreatment": "atmospheric",
+  "ambientGlow": true,
+  "monoLabels": true,
+  "launchDrama": "prominent"
+}/*EDITMODE-END*/;
+
+(function setupTweaks() {
+  // Wait for tweaks-panel.jsx to register globals
+  const tryMount = () => {
+    if (!window.TweaksPanel) { setTimeout(tryMount, 50); return; }
+    const { TweaksPanel, TweakSection, TweakRadio, TweakColor, TweakToggle, TweakSelect, useTweaks } = window;
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    function App() {
+      const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+      // apply
+      React.useEffect(() => {
+        document.documentElement.style.setProperty('--accent', t.accent);
+        // derive accent-2 from accent (lighten ~10%)
+        document.documentElement.style.setProperty('--accent-2', t.accent);
+        document.documentElement.style.setProperty('--accent-shadow', hexToRgba(t.accent, 0.45));
+        document.documentElement.style.setProperty('--accent-soft', hexToRgba(t.accent, 0.10));
+        document.body.dataset.density = t.density;
+        document.body.dataset.weather = t.weatherTreatment;
+        document.body.dataset.glow = t.ambientGlow ? 'on' : 'off';
+        document.body.dataset.mono = t.monoLabels ? 'on' : 'off';
+        document.body.dataset.drama = t.launchDrama;
+      }, [t]);
+      return (
+        <TweaksPanel title="Tweaks">
+          <TweakSection title="Theme">
+            <TweakColor label="Accent" value={t.accent} onChange={(v) => setTweak('accent', v)} />
+            <TweakRadio label="Density" value={t.density} onChange={(v) => setTweak('density', v)}
+              options={[{label:'Compact', value:'compact'}, {label:'Comfy', value:'comfy'}]} />
+            <TweakToggle label="Ambient glow" value={t.ambientGlow} onChange={(v) => setTweak('ambientGlow', v)} />
+            <TweakToggle label="Mono labels" value={t.monoLabels} onChange={(v) => setTweak('monoLabels', v)} />
+          </TweakSection>
+          <TweakSection title="Weather treatment">
+            <TweakRadio label="Style" value={t.weatherTreatment} onChange={(v) => setTweak('weatherTreatment', v)}
+              options={[{label:'Atmospheric', value:'atmospheric'}, {label:'Flat', value:'flat'}]} />
+          </TweakSection>
+          <TweakSection title="Launch button">
+            <TweakRadio label="Drama" value={t.launchDrama} onChange={(v) => setTweak('launchDrama', v)}
+              options={[{label:'Subtle', value:'subtle'}, {label:'Prominent', value:'prominent'}, {label:'Hero', value:'hero'}]} />
+          </TweakSection>
+        </TweaksPanel>
+      );
+    }
+    ReactDOM.createRoot(root).render(<App />);
+  };
+  tryMount();
+})();
+
+function hexToRgba(hex, a) {
+  const m = hex.replace('#','').match(/.{1,2}/g);
+  if (!m) return `rgba(255,59,31,${a})`;
+  const [r,g,b] = m.map((x) => parseInt(x, 16));
+  return `rgba(${r},${g},${b},${a})`;
+}
+</script>
+
+<style>
+/* Tweak: density */
+body[data-density="compact"] .panel { padding: 14px 16px; }
+body[data-density="compact"] .layout { gap: 10px; padding: 14px; }
+body[data-density="compact"] .panel-title { font-size: 16px; }
+body[data-density="compact"] .session-groups { gap: 10px; }
+
+/* Tweak: weather treatment flat */
+body[data-weather="flat"] .weather-card .wc-bg,
+body[data-weather="flat"] .wx-pill .wc-bg { display: none; }
+body[data-weather="flat"] .weather-card.active,
+body[data-weather="flat"] .wx-pill.active {
+  background: var(--accent-soft);
+}
+
+/* Tweak: ambient glow */
+body[data-glow="off"] .ambient { opacity: 0.3; }
+body[data-glow="off"] .ambient::after { display: none; }
+
+/* Tweak: mono labels */
+body[data-mono="off"] .panel-eyebrow,
+body[data-mono="off"] .panel-aside,
+body[data-mono="off"] .field-label,
+body[data-mono="off"] .session-group-title,
+body[data-mono="off"] .summary-label,
+body[data-mono="off"] .footer-meta,
+body[data-mono="off"] .brand-tag,
+body[data-mono="off"] .status-pill,
+body[data-mono="off"] .track-stats,
+body[data-mono="off"] .track-meta,
+body[data-mono="off"] .wc-meta {
+  font-family: 'Inter Tight', sans-serif !important;
+  letter-spacing: 0.4px;
+}
+
+/* Tweak: launch drama */
+body[data-drama="subtle"] .launch-btn {
+  background: rgba(255,255,255,0.05);
+  color: var(--accent-2);
+  border: 1px solid var(--accent);
+  box-shadow: none;
+  padding: 14px 20px;
+  font-size: 13px;
+}
+body[data-drama="subtle"] .launch-btn::before { display: none; }
+body[data-drama="subtle"] .launch-btn .arrow { background: var(--accent-soft); }
+
+body[data-drama="hero"] .launch-btn {
+  padding: 26px 24px;
+  font-size: 17px;
+  letter-spacing: 3px;
+  border-radius: 14px;
+}
+body[data-drama="hero"] .launch-btn .arrow { width: 28px; height: 28px; }
+body[data-drama="hero"] .panel-launch::after {
+  content: 'HOLD TO LAUNCH'; position: absolute;
+  bottom: 8px; left: 50%; transform: translateX(-50%);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; letter-spacing: 2px;
+  color: var(--text-faint); pointer-events: none;
+}
+</style>
+</body>
+</html>
